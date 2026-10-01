@@ -20,7 +20,7 @@
   Do NOT use the example unless it is actually your ESP32 IP.
 */
 
-const ESP32_IP = "192.168.1.201";
+const ESP32_IP = "192.168.100.193";
 
 
 /* =========================================================
