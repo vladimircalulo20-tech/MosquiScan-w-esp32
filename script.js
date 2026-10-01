@@ -1,234 +1,304 @@
-// ============================================================
-// MOSQUISCAN
-// Smartphone-Based AI System for Detecting Potential
-// Mosquito Breeding Sites
-// ============================================================
+/* =========================================================
+   MOSQUISCAN JAVASCRIPT
+========================================================= */
 
-// =========================
-// CONFIGURATION
-// =========================
 
-// Put your ESP32 IP address here.
-// Example: const ESP32_IP = "192.168.1.45";
+/* =========================================================
+   CONFIGURATION
+========================================================= */
+
+/*
+  Put your ESP32 IP address here.
+
+  Example:
+  const ESP32_IP = "192.168.1.45";
+
+  If you haven't connected the ESP32 yet,
+  leave it empty.
+*/
+
 const ESP32_IP = "";
 
-const MODEL_URL = "https://teachablemachine.withgoogle.com/models/cKLAix4wn/";
 
-// =========================
-// GLOBAL VARIABLES
-// =========================
+/*
+  Your Teachable Machine model.
+*/
+
+const MODEL_URL =
+  "https://teachablemachine.withgoogle.com/models/cKLAix4wn/";
+
+
+/* =========================================================
+   GLOBAL VARIABLES
+========================================================= */
 
 let model = null;
+
 let imageData = null;
 
 let currentAIResult = null;
+
 let currentConfidence = null;
+
 let currentReason = null;
 
 let currentMarker = null;
+
 let map = null;
 
-let records = JSON.parse(localStorage.getItem("mosquiscanRecords")) || [];
+
+/*
+  Load previously saved records.
+*/
+
+let records =
+  JSON.parse(
+    localStorage.getItem("mosquiscanRecords")
+  ) || [];
 
 
-// =========================
-// PAGE INITIALIZATION
-// =========================
+/* =========================================================
+   INITIALIZATION
+========================================================= */
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener(
+  "DOMContentLoaded",
+  initialize
+);
 
-  initializeMap();
+
+async function initialize() {
+
+  setupMap();
+
+  setupEventListeners();
+
   updateDashboard();
-  displaySavedRecords();
 
-  const imageInput = document.getElementById("imageInput");
+  renderRecords();
 
-  if (imageInput) {
-    imageInput.addEventListener("change", handleImageUpload);
-  }
-
-  const classifyButton = document.getElementById("classifyButton");
-
-  if (classifyButton) {
-    classifyButton.addEventListener("click", analyzeImage);
-  }
-
-  const sendButton = document.getElementById("sendLedButton");
-
-  if (sendButton) {
-    sendButton.addEventListener("click", sendResultToESP32);
-  }
-
-  const saveButton = document.getElementById("saveButton");
-
-  if (saveButton) {
-    saveButton.addEventListener("click", saveInspection);
-  }
-
-  const locationButton = document.getElementById("locationButton");
-
-  if (locationButton) {
-    locationButton.addEventListener("click", getCurrentLocation);
-  }
-
-  const clearLocationButton = document.getElementById("clearLocationButton");
-
-  if (clearLocationButton) {
-    clearLocationButton.addEventListener("click", clearLocation);
-  }
-
-});
-
-
-// ============================================================
-// MAP
-// ============================================================
-
-function initializeMap() {
-
-  const mapElement = document.getElementById("map");
-
-  if (!mapElement) return;
-
-  map = L.map("map").setView([9.8190, 124.4970], 13);
-
-  L.tileLayer(
-    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    {
-      maxZoom: 19,
-      attribution: "&copy; OpenStreetMap contributors"
-    }
-  ).addTo(map);
+  await loadAIModel();
 
 }
 
 
-// ============================================================
-// IMAGE UPLOAD / CAMERA
-// ============================================================
+/* =========================================================
+   EVENT LISTENERS
+========================================================= */
 
-function handleImageUpload(event) {
+function setupEventListeners() {
 
-  const file = event.target.files[0];
+  const imageInput =
+    document.getElementById("imageInput");
 
-  if (!file) return;
+  const classifyButton =
+    document.getElementById("classifyButton");
 
-  const reader = new FileReader();
+  const sendLedButton =
+    document.getElementById("sendLedButton");
+
+  const saveButton =
+    document.getElementById("saveButton");
+
+  const locationButton =
+    document.getElementById("locationButton");
+
+  const clearLocationButton =
+    document.getElementById(
+      "clearLocationButton"
+    );
+
+  const removeImageButton =
+    document.getElementById(
+      "removeImageButton"
+    );
+
+
+  imageInput.addEventListener(
+    "change",
+    handleImageSelection
+  );
+
+
+  classifyButton.addEventListener(
+    "click",
+    classifyImage
+  );
+
+
+  sendLedButton.addEventListener(
+    "click",
+    sendResultToESP32
+  );
+
+
+  saveButton.addEventListener(
+    "click",
+    saveInspection
+  );
+
+
+  locationButton.addEventListener(
+    "click",
+    getCurrentLocation
+  );
+
+
+  clearLocationButton.addEventListener(
+    "click",
+    clearLocation
+  );
+
+
+  removeImageButton.addEventListener(
+    "click",
+    clearImageOnly
+  );
+
+}
+
+
+/* =========================================================
+   LOAD AI MODEL
+========================================================= */
+
+async function loadAIModel() {
+
+  try {
+
+    showMessage(
+      "Loading AI model...",
+      "normal"
+    );
+
+    model =
+      await tmImage.load(
+        MODEL_URL + "model.json",
+        MODEL_URL + "metadata.json"
+      );
+
+    showMessage(
+      "AI model loaded successfully.",
+      "success"
+    );
+
+  } catch (error) {
+
+    console.error(
+      "AI model loading error:",
+      error
+    );
+
+    showMessage(
+      "Could not load the AI model. Check your internet connection and model URL.",
+      "error"
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   IMAGE SELECTION
+========================================================= */
+
+function handleImageSelection(event) {
+
+  const file =
+    event.target.files[0];
+
+  if (!file) {
+    return;
+  }
+
+
+  if (!file.type.startsWith("image/")) {
+
+    showMessage(
+      "Please select an image file.",
+      "error"
+    );
+
+    return;
+  }
+
+
+  const reader =
+    new FileReader();
+
 
   reader.onload = function(e) {
 
     imageData = e.target.result;
 
-    const preview = document.getElementById("imagePreview");
-    const previewArea = document.getElementById("previewArea");
 
-    if (preview) {
-      preview.src = imageData;
-      preview.style.display = "block";
-    }
+    const preview =
+      document.getElementById(
+        "imagePreview"
+      );
 
-    if (previewArea) {
-      previewArea.classList.remove("hidden");
-    }
+    preview.src =
+      imageData;
 
-    // Reset previous AI result
-    currentAIResult = null;
-    currentConfidence = null;
-    currentReason = null;
 
-    const aiResult = document.getElementById("aiResult");
+    document
+      .getElementById("previewArea")
+      .classList.remove("hidden");
 
-    if (aiResult) {
-      aiResult.textContent = "Ready to analyze";
-    }
 
-    const confidence = document.getElementById("confidence");
+    /*
+      Reset previous AI result
+      when a new image is selected.
+    */
 
-    if (confidence) {
-      confidence.textContent = "Click Analyze Image.";
-    }
+    resetAIResult();
 
-    const reason = document.getElementById("reason");
 
-    if (reason) {
-      reason.textContent = "The reason will appear after the image is analyzed.";
-    }
+    document
+      .getElementById("classifyButton")
+      .disabled = false;
 
-    const resultIcon = document.getElementById("resultIcon");
 
-    if (resultIcon) {
-      resultIcon.className = "result-icon";
-      resultIcon.textContent = "?";
-    }
+    document
+      .getElementById("saveButton")
+      .disabled = true;
 
-    const classifyButton = document.getElementById("classifyButton");
 
-    if (classifyButton) {
-      classifyButton.disabled = false;
-    }
+    document
+      .getElementById("sendLedButton")
+      .disabled = true;
 
-    const sendButton = document.getElementById("sendLedButton");
 
-    if (sendButton) {
-      sendButton.disabled = true;
-    }
-
-    const saveButton = document.getElementById("saveButton");
-
-    if (saveButton) {
-      saveButton.disabled = true;
-    }
+    showMessage(
+      "Image ready for AI analysis.",
+      "normal"
+    );
 
   };
+
 
   reader.readAsDataURL(file);
 
 }
 
 
-// ============================================================
-// LOAD TEACHABLE MACHINE MODEL
-// ============================================================
+/* =========================================================
+   CLASSIFY IMAGE
+========================================================= */
 
-async function loadModel() {
+async function classifyImage() {
 
-  if (model) {
-    return model;
-  }
-
-  try {
-
-    showMessage("Loading AI model...", "normal");
-
-    const modelURL = MODEL_URL + "model.json";
-    const metadataURL = MODEL_URL + "metadata.json";
-
-    model = await tmImage.load(modelURL, metadataURL);
-
-    showMessage("AI model loaded successfully.", "normal");
-
-    return model;
-
-  } catch (error) {
-
-    console.error("AI model loading error:", error);
+  if (!model) {
 
     showMessage(
-      "Unable to load the AI model. Check your internet connection and model URL.",
+      "The AI model is still loading.",
       "error"
     );
 
-    return null;
+    return;
   }
 
-}
-
-
-// ============================================================
-// ANALYZE IMAGE
-// ============================================================
-
-async function analyzeImage() {
 
   if (!imageData) {
 
@@ -240,55 +310,78 @@ async function analyzeImage() {
     return;
   }
 
-  const preview = document.getElementById("imagePreview");
 
-  if (!preview) return;
+  const button =
+    document.getElementById(
+      "classifyButton"
+    );
 
-  const classifyButton = document.getElementById("classifyButton");
 
-  if (classifyButton) {
-    classifyButton.disabled = true;
-    classifyButton.textContent = "Analyzing...";
-  }
+  button.disabled = true;
+
+  button.textContent =
+    "⏳ Analyzing Image...";
+
 
   try {
 
-    const loadedModel = await loadModel();
+    const image =
+      document.getElementById(
+        "imagePreview"
+      );
 
-    if (!loadedModel) {
-      throw new Error("AI model could not be loaded.");
-    }
 
-    const predictions = await loadedModel.predict(preview);
+    const predictions =
+      await model.predict(image);
 
-    if (!predictions || predictions.length === 0) {
-      throw new Error("No prediction was returned.");
-    }
 
-    // Find prediction with highest probability
-    let bestPrediction = predictions[0];
+    /*
+      Find the prediction
+      with the highest probability.
+    */
 
-    for (let i = 1; i < predictions.length; i++) {
+    let highest =
+      predictions[0];
+
+
+    for (
+      let i = 1;
+      i < predictions.length;
+      i++
+    ) {
 
       if (
         predictions[i].probability >
-        bestPrediction.probability
+        highest.probability
       ) {
 
-        bestPrediction = predictions[i];
+        highest =
+          predictions[i];
 
       }
 
     }
 
-    const className = bestPrediction.className;
 
-    const confidence =
-      bestPrediction.probability * 100;
+    const className =
+      highest.className;
 
-    // Normalize class names
+
+    currentConfidence =
+      highest.probability;
+
+
+    /*
+      Convert Teachable Machine
+      class names into the
+      official MosquiScan labels.
+    */
+
     const normalized =
-      className.toLowerCase().trim();
+      className
+        .toLowerCase()
+        .trim();
+
 
     if (
       normalized.includes("not") &&
@@ -298,144 +391,81 @@ async function analyzeImage() {
       currentAIResult =
         "Not a Possible Breeding Site";
 
-    } else if (
+    }
+
+    else if (
       normalized.includes("possible")
     ) {
 
       currentAIResult =
         "Possible Breeding Site";
 
-    } else {
+    }
 
-      currentAIResult = className;
+    else {
+
+      currentAIResult =
+        className;
 
     }
 
-    currentConfidence = confidence;
 
-    currentReason = generateReason(currentAIResult);
+    currentReason =
+      generateReason(
+        currentAIResult
+      );
+
 
     displayAIResult();
 
-    // Enable buttons
-    const sendButton =
-      document.getElementById("sendLedButton");
 
-    if (sendButton) {
-      sendButton.disabled = false;
-    }
+    document
+      .getElementById(
+        "sendLedButton"
+      )
+      .disabled = false;
 
-    const saveButton =
-      document.getElementById("saveButton");
 
-    if (saveButton) {
-      saveButton.disabled = false;
-    }
+    document
+      .getElementById(
+        "saveButton"
+      )
+      .disabled = false;
+
 
     showMessage(
-      "Image analyzed successfully.",
-      "normal"
+      "AI analysis completed.",
+      "success"
     );
 
-  } catch (error) {
+  }
 
-    console.error(error);
+  catch (error) {
+
+    console.error(
+      "Classification error:",
+      error
+    );
 
     showMessage(
-      "An error occurred while analyzing the image.",
+      "Could not analyze the image.",
       "error"
     );
 
-  } finally {
-
-    if (classifyButton) {
-
-      classifyButton.disabled = false;
-
-      classifyButton.textContent =
-        "Analyze Image";
-
-    }
-
   }
+
+
+  button.disabled = false;
+
+  button.textContent =
+    "🔍 Analyze Image";
 
 }
 
 
-// ============================================================
-// DISPLAY AI RESULT
-// ============================================================
-
-function displayAIResult() {
-
-  const aiResult =
-    document.getElementById("aiResult");
-
-  const confidence =
-    document.getElementById("confidence");
-
-  const reason =
-    document.getElementById("reason");
-
-  const resultIcon =
-    document.getElementById("resultIcon");
-
-
-  if (aiResult) {
-
-    aiResult.textContent =
-      currentAIResult;
-
-  }
-
-
-  if (confidence) {
-
-    confidence.textContent =
-      "Confidence: " +
-      currentConfidence.toFixed(2) +
-      "%";
-
-  }
-
-
-  if (reason) {
-
-    reason.textContent =
-      currentReason;
-
-  }
-
-
-  if (resultIcon) {
-
-    if (
-      currentAIResult ===
-      "Possible Breeding Site"
-    ) {
-
-      resultIcon.className =
-        "result-icon possible";
-
-      resultIcon.textContent = "🔴";
-
-    } else {
-
-      resultIcon.className =
-        "result-icon not-possible";
-
-      resultIcon.textContent = "🟢";
-
-    }
-
-  }
-
-}
-
-
-// ============================================================
-// GENERATE REASON
-// ============================================================
+/* =========================================================
+   GENERATE REASON
+========================================================= */
 
 function generateReason(result) {
 
@@ -452,6 +482,7 @@ function generateReason(result) {
 
   }
 
+
   if (
     result ===
     "Not a Possible Breeding Site"
@@ -465,14 +496,95 @@ function generateReason(result) {
 
   }
 
-  return "No classification reason is available.";
+
+  return (
+    "The AI classification does not match the " +
+    "standard MosquiScan categories."
+  );
 
 }
 
 
-// ============================================================
-// SEND RESULT TO ESP32
-// ============================================================
+/* =========================================================
+   DISPLAY AI RESULT
+========================================================= */
+
+function displayAIResult() {
+
+  const result =
+    document.getElementById(
+      "aiResult"
+    );
+
+  const confidence =
+    document.getElementById(
+      "confidence"
+    );
+
+  const reason =
+    document.getElementById(
+      "reason"
+    );
+
+  const icon =
+    document.getElementById(
+      "resultIcon"
+    );
+
+
+  result.textContent =
+    currentAIResult;
+
+
+  confidence.textContent =
+    (
+      currentConfidence * 100
+    ).toFixed(2) + "%";
+
+
+  reason.textContent =
+    currentReason;
+
+
+  if (
+    currentAIResult ===
+    "Possible Breeding Site"
+  ) {
+
+    icon.textContent = "🔴";
+
+    icon.style.background =
+      "#fff0f0";
+
+  }
+
+  else if (
+    currentAIResult ===
+    "Not a Possible Breeding Site"
+  ) {
+
+    icon.textContent = "🟢";
+
+    icon.style.background =
+      "#e9f8f1";
+
+  }
+
+  else {
+
+    icon.textContent = "🧠";
+
+    icon.style.background =
+      "#eef4ff";
+
+  }
+
+}
+
+
+/* =========================================================
+   ESP32
+========================================================= */
 
 async function sendResultToESP32() {
 
@@ -489,6 +601,7 @@ async function sendResultToESP32() {
     );
 
     return false;
+
   }
 
 
@@ -500,6 +613,7 @@ async function sendResultToESP32() {
     );
 
     return false;
+
   }
 
 
@@ -511,16 +625,22 @@ async function sendResultToESP32() {
     "Possible Breeding Site"
   ) {
 
-    endpoint = "/possible";
+    endpoint =
+      "/possible";
 
-  } else if (
+  }
+
+  else if (
     currentAIResult ===
     "Not a Possible Breeding Site"
   ) {
 
-    endpoint = "/not-possible";
+    endpoint =
+      "/not-possible";
 
-  } else {
+  }
+
+  else {
 
     showMessage(
       "The AI result is not recognized by the ESP32.",
@@ -540,15 +660,16 @@ async function sendResultToESP32() {
     );
 
 
-    const response = await fetch(
-      "http://" +
-      ESP32_IP +
-      endpoint,
-      {
-        method: "GET",
-        cache: "no-store"
-      }
-    );
+    const response =
+      await fetch(
+        "http://" +
+        ESP32_IP +
+        endpoint,
+        {
+          method: "GET",
+          cache: "no-store"
+        }
+      );
 
 
     if (!response.ok) {
@@ -572,15 +693,17 @@ async function sendResultToESP32() {
 
 
     showMessage(
-      "ESP32 received: " + text,
-      "normal"
+      "ESP32 received: " +
+      text,
+      "success"
     );
 
 
     return true;
 
+  }
 
-  } catch (error) {
+  catch (error) {
 
     console.error(
       "ESP32 connection error:",
@@ -607,44 +730,422 @@ async function sendResultToESP32() {
 }
 
 
-// ============================================================
-// ESP32 STATUS
-// ============================================================
+/* =========================================================
+   ESP32 STATUS
+========================================================= */
 
-function setESPStatus(status, type) {
+function setESPStatus(
+  text,
+  type
+) {
 
-  const statusText =
-    document.getElementById("espStatus");
+  const status =
+    document.getElementById(
+      "espStatus"
+    );
 
-  const statusDot =
-    document.getElementById("espDot");
+  const dot =
+    document.getElementById(
+      "espDot"
+    );
 
 
-  if (statusText) {
+  status.textContent =
+    "ESP32: " + text;
 
-    statusText.textContent =
-      "ESP32: " + status;
+
+  dot.className =
+    "status-dot";
+
+
+  if (
+    type === "connected"
+  ) {
+
+    dot.classList.add(
+      "connected"
+    );
 
   }
 
+  else if (
+    type === "error"
+  ) {
 
-  if (statusDot) {
-
-    statusDot.className =
-      "status-dot " + type;
+    dot.classList.add(
+      "error"
+    );
 
   }
 
 }
 
 
-// ============================================================
-// CURRENT LOCATION
-// ============================================================
+/* =========================================================
+   SAVE INSPECTION
+========================================================= */
+
+function saveInspection() {
+
+  if (!imageData) {
+
+    showMessage(
+      "Please capture or upload an image first.",
+      "error"
+    );
+
+    return;
+
+  }
+
+
+  if (!currentAIResult) {
+
+    showMessage(
+      "Please analyze the image first.",
+      "error"
+    );
+
+    return;
+
+  }
+
+
+  const latitude =
+    document.getElementById(
+      "latitude"
+    ).value;
+
+
+  const longitude =
+    document.getElementById(
+      "longitude"
+    ).value;
+
+
+  const notes =
+    document.getElementById(
+      "notes"
+    ).value;
+
+
+  const record = {
+
+    id:
+      Date.now(),
+
+    image:
+      imageData,
+
+    result:
+      currentAIResult,
+
+    confidence:
+      currentConfidence,
+
+    reason:
+      currentReason,
+
+    latitude:
+      latitude || "",
+
+    longitude:
+      longitude || "",
+
+    notes:
+      notes || "",
+
+    date:
+      new Date().toLocaleString()
+
+  };
+
+
+  records.unshift(
+    record
+  );
+
+
+  localStorage.setItem(
+    "mosquiscanRecords",
+    JSON.stringify(records)
+  );
+
+
+  updateDashboard();
+
+  renderRecords();
+
+  addRecordMarker(
+    record
+  );
+
+
+  /*
+    IMPORTANT:
+    Automatically clear the
+    entire inspection form.
+  */
+
+  clearInspectionForm();
+
+
+  showMessage(
+    "Inspection saved successfully. The form is now ready for the next inspection.",
+    "success"
+  );
+
+}
+
+
+/* =========================================================
+   CLEAR INSPECTION FORM
+========================================================= */
+
+function clearInspectionForm() {
+
+  /*
+    Clear image input
+  */
+
+  const imageInput =
+    document.getElementById(
+      "imageInput"
+    );
+
+  imageInput.value = "";
+
+
+  /*
+    Clear image preview
+  */
+
+  const preview =
+    document.getElementById(
+      "imagePreview"
+    );
+
+  preview.src = "";
+
+
+  document
+    .getElementById(
+      "previewArea"
+    )
+    .classList.add(
+      "hidden"
+    );
+
+
+  /*
+    Clear AI result
+  */
+
+  document.getElementById(
+    "aiResult"
+  ).textContent =
+    "No image analyzed yet";
+
+
+  document.getElementById(
+    "confidence"
+  ).textContent =
+    "—";
+
+
+  document.getElementById(
+    "reason"
+  ).textContent =
+    "Analyze an image to generate an explanation";
+
+
+  document.getElementById(
+    "resultIcon"
+  ).textContent =
+    "🧠";
+
+
+  document.getElementById(
+    "resultIcon"
+  ).style.background =
+    "#e9f8f1";
+
+
+  /*
+    Clear location
+  */
+
+  document.getElementById(
+    "latitude"
+  ).value = "";
+
+
+  document.getElementById(
+    "longitude"
+  ).value = "";
+
+
+  /*
+    Clear notes
+  */
+
+  document.getElementById(
+    "notes"
+  ).value = "";
+
+
+  /*
+    Disable buttons
+  */
+
+  document.getElementById(
+    "classifyButton"
+  ).disabled = true;
+
+
+  document.getElementById(
+    "sendLedButton"
+  ).disabled = true;
+
+
+  document.getElementById(
+    "saveButton"
+  ).disabled = true;
+
+
+  /*
+    Reset variables
+  */
+
+  imageData = null;
+
+  currentAIResult = null;
+
+  currentConfidence = null;
+
+  currentReason = null;
+
+
+  /*
+    Remove temporary marker
+  */
+
+  if (
+    currentMarker &&
+    map
+  ) {
+
+    map.removeLayer(
+      currentMarker
+    );
+
+    currentMarker = null;
+
+  }
+
+}
+
+
+/* =========================================================
+   CLEAR IMAGE ONLY
+========================================================= */
+
+function clearImageOnly() {
+
+  document.getElementById(
+    "imageInput"
+  ).value = "";
+
+
+  document.getElementById(
+    "imagePreview"
+  ).src = "";
+
+
+  document
+    .getElementById(
+      "previewArea"
+    )
+    .classList.add(
+      "hidden"
+    );
+
+
+  resetAIResult();
+
+
+  showMessage(
+    "Image removed.",
+    "normal"
+  );
+
+}
+
+
+/* =========================================================
+   RESET AI RESULT
+========================================================= */
+
+function resetAIResult() {
+
+  currentAIResult = null;
+
+  currentConfidence = null;
+
+  currentReason = null;
+
+
+  document.getElementById(
+    "aiResult"
+  ).textContent =
+    "No image analyzed yet";
+
+
+  document.getElementById(
+    "confidence"
+  ).textContent =
+    "—";
+
+
+  document.getElementById(
+    "reason"
+  ).textContent =
+    "Analyze an image to generate an explanation";
+
+
+  document.getElementById(
+    "resultIcon"
+  ).textContent =
+    "🧠";
+
+
+  document.getElementById(
+    "resultIcon"
+  ).style.background =
+    "#e9f8f1";
+
+
+  document.getElementById(
+    "sendLedButton"
+  ).disabled = true;
+
+
+  document.getElementById(
+    "saveButton"
+  ).disabled = true;
+
+}
+
+
+/* =========================================================
+   LOCATION
+========================================================= */
 
 function getCurrentLocation() {
 
-  if (!navigator.geolocation) {
+  if (
+    !navigator.geolocation
+  ) {
 
     showMessage(
       "Geolocation is not supported by this browser.",
@@ -652,6 +1153,7 @@ function getCurrentLocation() {
     );
 
     return;
+
   }
 
 
@@ -665,69 +1167,35 @@ function getCurrentLocation() {
 
     function(position) {
 
-      const latitude =
+      const lat =
         position.coords.latitude;
 
-      const longitude =
+
+      const lng =
         position.coords.longitude;
 
 
-      const latitudeInput =
-        document.getElementById("latitude");
-
-      const longitudeInput =
-        document.getElementById("longitude");
-
-
-      if (latitudeInput) {
-
-        latitudeInput.value =
-          latitude.toFixed(6);
-
-      }
+      document.getElementById(
+        "latitude"
+      ).value =
+        lat.toFixed(6);
 
 
-      if (longitudeInput) {
-
-        longitudeInput.value =
-          longitude.toFixed(6);
-
-      }
+      document.getElementById(
+        "longitude"
+      ).value =
+        lng.toFixed(6);
 
 
-      if (map) {
-
-        map.setView(
-          [latitude, longitude],
-          17
-        );
-
-
-        if (currentMarker) {
-
-          map.removeLayer(
-            currentMarker
-          );
-
-        }
-
-
-        currentMarker =
-          L.marker(
-            [latitude, longitude]
-          ).addTo(map);
-
-
-        currentMarker.bindPopup(
-          "Current Inspection Location"
-        ).openPopup();
-
-      }
+      setMapLocation(
+        lat,
+        lng
+      );
 
 
       showMessage(
         "Current location added.",
-        "normal"
+        "success"
       );
 
     },
@@ -742,7 +1210,7 @@ function getCurrentLocation() {
 
 
       showMessage(
-        "Unable to get your location. Please enter the latitude and longitude manually.",
+        "Unable to get your location. Please allow location access or enter the coordinates manually.",
         "error"
       );
 
@@ -750,7 +1218,9 @@ function getCurrentLocation() {
 
     {
       enableHighAccuracy: true,
+
       timeout: 10000,
+
       maximumAge: 0
     }
 
@@ -759,30 +1229,26 @@ function getCurrentLocation() {
 }
 
 
-// ============================================================
-// CLEAR LOCATION
-// ============================================================
+/* =========================================================
+   CLEAR LOCATION
+========================================================= */
 
 function clearLocation() {
 
-  const latitude =
-    document.getElementById("latitude");
-
-  const longitude =
-    document.getElementById("longitude");
+  document.getElementById(
+    "latitude"
+  ).value = "";
 
 
-  if (latitude) {
-    latitude.value = "";
-  }
+  document.getElementById(
+    "longitude"
+  ).value = "";
 
 
-  if (longitude) {
-    longitude.value = "";
-  }
-
-
-  if (currentMarker && map) {
+  if (
+    currentMarker &&
+    map
+  ) {
 
     map.removeLayer(
       currentMarker
@@ -801,109 +1267,114 @@ function clearLocation() {
 }
 
 
-// ============================================================
-// SAVE INSPECTION
-// ============================================================
+/* =========================================================
+   MAP
+========================================================= */
 
-function saveInspection() {
+function setupMap() {
 
-  if (!imageData) {
-
-    showMessage(
-      "Please capture or upload an image first.",
-      "error"
-    );
-
-    return;
-  }
+  map =
+    L.map("map")
+      .setView(
+        [9.8190, 124.4970],
+        13
+      );
 
 
-  if (!currentAIResult) {
+  L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {
+      maxZoom: 19,
 
-    showMessage(
-      "Please analyze the image first.",
-      "error"
-    );
-
-    return;
-  }
-
-
-  const latitude =
-    document.getElementById("latitude")?.value || "";
-
-  const longitude =
-    document.getElementById("longitude")?.value || "";
-
-  const notes =
-    document.getElementById("notes")?.value || "";
+      attribution:
+        '&copy; OpenStreetMap contributors'
+    }
+  ).addTo(map);
 
 
-  const record = {
+  /*
+    Load markers from
+    previously saved records.
+  */
 
-    id: Date.now(),
+  records.forEach(
+    function(record) {
 
-    image: imageData,
+      addRecordMarker(
+        record
+      );
 
-    result: currentAIResult,
-
-    confidence: currentConfidence,
-
-    reason: currentReason,
-
-    latitude: latitude,
-
-    longitude: longitude,
-
-    notes: notes,
-
-    date: new Date().toLocaleString()
-
-  };
-
-
-  records.push(record);
-
-
-  localStorage.setItem(
-    "mosquiscanRecords",
-    JSON.stringify(records)
-  );
-
-
-  // Add marker to map
-  addRecordMarker(record);
-
-
-  // Update dashboard
-  updateDashboard();
-
-
-  // Update saved records section
-  displaySavedRecords();
-
-
-  // Clear the form AFTER saving
-  clearInspectionForm();
-
-
-  showMessage(
-    "Inspection saved successfully. Ready for the next inspection.",
-    "normal"
+    }
   );
 
 }
 
 
-// ============================================================
-// ADD RECORD MARKER
-// ============================================================
+/* =========================================================
+   SET MAP LOCATION
+========================================================= */
 
-function addRecordMarker(record) {
+function setMapLocation(
+  lat,
+  lng
+) {
 
-  if (!map) return;
+  if (!map) {
+    return;
+  }
+
+
+  map.setView(
+    [lat, lng],
+    17
+  );
+
 
   if (
+    currentMarker
+  ) {
+
+    map.removeLayer(
+      currentMarker
+    );
+
+  }
+
+
+  const markerIcon =
+    createMarkerIcon(
+      "not-possible"
+    );
+
+
+  currentMarker =
+    L.marker(
+      [lat, lng],
+      {
+        icon:
+          markerIcon
+      }
+    )
+      .addTo(map);
+
+
+  currentMarker.bindPopup(
+    "<strong>Current Inspection Location</strong>"
+  ).openPopup();
+
+}
+
+
+/* =========================================================
+   ADD RECORD MARKER
+========================================================= */
+
+function addRecordMarker(
+  record
+) {
+
+  if (
+    !map ||
     !record.latitude ||
     !record.longitude
   ) {
@@ -914,10 +1385,15 @@ function addRecordMarker(record) {
 
 
   const lat =
-    parseFloat(record.latitude);
+    Number(
+      record.latitude
+    );
+
 
   const lng =
-    parseFloat(record.longitude);
+    Number(
+      record.longitude
+    );
 
 
   if (
@@ -930,199 +1406,207 @@ function addRecordMarker(record) {
   }
 
 
-  let markerColor;
-
-
-  if (
+  const type =
     record.result ===
     "Possible Breeding Site"
-  ) {
-
-    markerColor = "red";
-
-  } else {
-
-    markerColor = "green";
-
-  }
-
-
-  const icon =
-    L.divIcon({
-
-      className: "custom-map-marker",
-
-      html:
-        `<div class="map-marker ${markerColor}"></div>`,
-
-      iconSize: [20, 20],
-
-      iconAnchor: [10, 10]
-
-    });
+      ? "possible"
+      : "not-possible";
 
 
   const marker =
     L.marker(
       [lat, lng],
-      { icon: icon }
+      {
+        icon:
+          createMarkerIcon(
+            type
+          )
+      }
     ).addTo(map);
 
 
-  const imageHTML =
-    record.image
-      ? `<img src="${record.image}" 
-          style="width:120px;height:80px;object-fit:cover;border-radius:8px;margin-top:8px;">`
-      : "";
+  const popup =
+    `
+      <div style="min-width:180px">
+
+        <strong>
+          ${escapeHTML(record.result)}
+        </strong>
+
+        <br><br>
+
+        <b>Confidence:</b>
+        ${
+          (
+            Number(record.confidence) *
+            100
+          ).toFixed(2)
+        }%
+
+        <br>
+
+        <b>Date:</b>
+        ${escapeHTML(record.date)}
+
+        <br><br>
+
+        ${
+          record.image
+            ? `<img
+                src="${record.image}"
+                style="
+                  width:100%;
+                  max-height:120px;
+                  object-fit:cover;
+                  border-radius:8px;
+                "
+              >`
+            : ""
+        }
+
+      </div>
+    `;
 
 
-  marker.bindPopup(`
-
-    <div style="max-width:180px;">
-
-      <strong>
-        ${record.result}
-      </strong>
-
-      <br>
-
-      Confidence:
-      ${Number(record.confidence).toFixed(2)}%
-
-      <br>
-
-      ${imageHTML}
-
-      <br>
-
-      <small>
-        ${record.date}
-      </small>
-
-    </div>
-
-  `);
-
-}
-
-
-// ============================================================
-// DISPLAY ALL SAVED MARKERS
-// ============================================================
-
-function displaySavedRecords() {
-
-  if (!map) return;
-
-
-  records.forEach(
-    function(record) {
-
-      addRecordMarker(record);
-
-    }
+  marker.bindPopup(
+    popup
   );
 
 }
 
 
-// ============================================================
-// UPDATE DASHBOARD
-// ============================================================
+/* =========================================================
+   CREATE MARKER ICON
+========================================================= */
 
-function updateDashboard() {
+function createMarkerIcon(
+  type
+) {
 
-  const totalRecords =
-    document.getElementById("totalRecords");
+  return L.divIcon({
 
-  const possibleSites =
-    document.getElementById("possibleSites");
+    className: "",
 
-  const notPossibleSites =
-    document.getElementById("notPossibleSites");
+    html:
+      `<div class="custom-marker ${type}"></div>`,
 
+    iconSize: [18, 18],
 
-  const possibleCount =
-    records.filter(
-      record =>
-        record.result ===
-        "Possible Breeding Site"
-    ).length;
+    iconAnchor: [9, 9]
 
-
-  const notPossibleCount =
-    records.filter(
-      record =>
-        record.result ===
-        "Not a Possible Breeding Site"
-    ).length;
-
-
-  if (totalRecords) {
-
-    totalRecords.textContent =
-      records.length;
-
-  }
-
-
-  if (possibleSites) {
-
-    possibleSites.textContent =
-      possibleCount;
-
-  }
-
-
-  if (notPossibleSites) {
-
-    notPossibleSites.textContent =
-      notPossibleCount;
-
-  }
+  });
 
 }
 
 
-// ============================================================
-// DISPLAY SAVED RECORDS
-// ============================================================
+/* =========================================================
+   DASHBOARD
+========================================================= */
 
-function displaySavedRecords() {
+function updateDashboard() {
+
+  const total =
+    records.length;
+
+
+  const possible =
+    records.filter(
+      function(record) {
+
+        return (
+          record.result ===
+          "Possible Breeding Site"
+        );
+
+      }
+    ).length;
+
+
+  const notPossible =
+    records.filter(
+      function(record) {
+
+        return (
+          record.result ===
+          "Not a Possible Breeding Site"
+        );
+
+      }
+    ).length;
+
+
+  document.getElementById(
+    "totalRecords"
+  ).textContent =
+    total;
+
+
+  document.getElementById(
+    "possibleSites"
+  ).textContent =
+    possible;
+
+
+  document.getElementById(
+    "notPossibleSites"
+  ).textContent =
+    notPossible;
+
+}
+
+
+/* =========================================================
+   RENDER RECORDS
+========================================================= */
+
+function renderRecords() {
 
   const container =
-    document.getElementById("recordsContainer");
+    document.getElementById(
+      "recordsContainer"
+    );
 
 
-  if (!container) return;
+  if (
+    records.length === 0
+  ) {
 
+    container.innerHTML =
 
-  container.innerHTML = "";
+      `
+        <div class="empty-records">
 
+          <div>
+            📂
+          </div>
 
-  if (records.length === 0) {
+          <h3>
+            No inspection records yet
+          </h3>
 
-    container.innerHTML = `
-      <div class="empty-records">
-        No inspection records yet.
-      </div>
-    `;
+          <p>
+            Saved inspections will appear here.
+          </p>
+
+        </div>
+      `;
 
     return;
 
   }
 
 
-  // Newest record first
-  const reversedRecords =
-    [...records].reverse();
+  container.innerHTML =
+    "";
 
 
-  reversedRecords.forEach(
+  records.forEach(
     function(record) {
 
       const card =
-        document.createElement("div");
+        document.createElement(
+          "div"
+        );
 
 
       card.className =
@@ -1136,79 +1620,72 @@ function displaySavedRecords() {
           : "not-possible";
 
 
-      card.innerHTML = `
+      card.innerHTML =
 
-        <div class="record-image">
+        `
+          <img
+            src="${record.image}"
+            class="record-image"
+            alt="Inspection image"
+          >
 
-          ${
-            record.image
-              ? `<img src="${record.image}" 
-                  alt="Inspection Image">`
-              : ""
-          }
+          <div class="record-info">
 
-        </div>
+            <span
+              class="record-result ${resultClass}"
+            >
+              ${escapeHTML(record.result)}
+            </span>
 
+            <h3>
+              Confidence:
+              ${
+                (
+                  Number(record.confidence) *
+                  100
+                ).toFixed(2)
+              }%
+            </h3>
 
-        <div class="record-content">
+            <p>
+              ${escapeHTML(record.reason)}
+            </p>
 
-          <div class="record-result ${resultClass}">
-            ${record.result}
-          </div>
-
-
-          <div class="record-confidence">
-
-            Confidence:
-            ${Number(record.confidence).toFixed(2)}%
-
-          </div>
-
-
-          <div class="record-reason">
-
-            <strong>Reason:</strong>
-
-            ${record.reason || "No reason recorded."}
-
-          </div>
-
-
-          <div class="record-location">
-
-            <strong>Location:</strong>
+            ${
+              record.notes
+                ? `
+                  <p>
+                    <strong>Notes:</strong>
+                    ${escapeHTML(record.notes)}
+                  </p>
+                `
+                : ""
+            }
 
             ${
               record.latitude &&
               record.longitude
-                ? `${record.latitude}, ${record.longitude}`
-                : "No location recorded."
+                ? `
+                  <p>
+                    📍
+                    ${escapeHTML(record.latitude)},
+                    ${escapeHTML(record.longitude)}
+                  </p>
+                `
+                : ""
             }
 
           </div>
 
-
-          <div class="record-notes">
-
-            <strong>Notes:</strong>
-
-            ${record.notes || "No notes."}
-
-          </div>
-
-
           <div class="record-date">
-
-            ${record.date}
-
+            ${escapeHTML(record.date)}
           </div>
-
-        </div>
-
-      `;
+        `;
 
 
-      container.appendChild(card);
+      container.appendChild(
+        card
+      );
 
     }
   );
@@ -1216,340 +1693,101 @@ function displaySavedRecords() {
 }
 
 
-// ============================================================
-// CLEAR INSPECTION FORM
-// ============================================================
+/* =========================================================
+   ESCAPE HTML
+========================================================= */
 
-function clearInspectionForm() {
+function escapeHTML(
+  value
+) {
 
-  // Clear image input
-  const imageInput =
-    document.getElementById("imageInput");
-
-
-  if (imageInput) {
-
-    imageInput.value = "";
-
-  }
-
-
-  // Clear image preview
-  const preview =
-    document.getElementById("imagePreview");
-
-
-  if (preview) {
-
-    preview.src = "";
-
-    preview.style.display =
-      "none";
-
-  }
-
-
-  // Hide preview area
-  const previewArea =
-    document.getElementById("previewArea");
-
-
-  if (previewArea) {
-
-    previewArea.classList.add(
-      "hidden"
+  return String(value || "")
+    .replace(
+      /&/g,
+      "&amp;"
+    )
+    .replace(
+      /</g,
+      "&lt;"
+    )
+    .replace(
+      />/g,
+      "&gt;"
+    )
+    .replace(
+      /"/g,
+      "&quot;"
+    )
+    .replace(
+      /'/g,
+      "&#039;"
     );
-
-  }
-
-
-  // Reset AI result
-  const aiResult =
-    document.getElementById("aiResult");
-
-
-  if (aiResult) {
-
-    aiResult.textContent =
-      "No result yet";
-
-  }
-
-
-  // Reset confidence
-  const confidence =
-    document.getElementById("confidence");
-
-
-  if (confidence) {
-
-    confidence.textContent =
-      "Upload an image to begin.";
-
-  }
-
-
-  // Reset reason
-  const reason =
-    document.getElementById("reason");
-
-
-  if (reason) {
-
-    reason.textContent =
-      "The reason will appear after the image is analyzed.";
-
-  }
-
-
-  // Reset result icon
-  const resultIcon =
-    document.getElementById("resultIcon");
-
-
-  if (resultIcon) {
-
-    resultIcon.className =
-      "result-icon";
-
-    resultIcon.textContent =
-      "?";
-
-  }
-
-
-  // Clear latitude
-  const latitude =
-    document.getElementById("latitude");
-
-
-  if (latitude) {
-
-    latitude.value = "";
-
-  }
-
-
-  // Clear longitude
-  const longitude =
-    document.getElementById("longitude");
-
-
-  if (longitude) {
-
-    longitude.value = "";
-
-  }
-
-
-  // Clear notes
-  const notes =
-    document.getElementById("notes");
-
-
-  if (notes) {
-
-    notes.value = "";
-
-  }
-
-
-  // Disable Analyze button
-  const analyzeButton =
-    document.getElementById("classifyButton");
-
-
-  if (analyzeButton) {
-
-    analyzeButton.disabled = true;
-
-  }
-
-
-  // Disable ESP32 button
-  const sendButton =
-    document.getElementById("sendLedButton");
-
-
-  if (sendButton) {
-
-    sendButton.disabled = true;
-
-  }
-
-
-  // Disable Save button
-  const saveButton =
-    document.getElementById("saveButton");
-
-
-  if (saveButton) {
-
-    saveButton.disabled = true;
-
-  }
-
-
-  // Reset variables
-  imageData = null;
-
-  currentAIResult = null;
-
-  currentConfidence = null;
-
-  currentReason = null;
-
-
-  // Remove temporary map marker
-  if (
-    typeof currentMarker !== "undefined" &&
-    currentMarker &&
-    map
-  ) {
-
-    map.removeLayer(
-      currentMarker
-    );
-
-    currentMarker = null;
-
-  }
 
 }
 
 
-// ============================================================
-// MESSAGE / NOTIFICATION
-// ============================================================
+/* =========================================================
+   MESSAGE
+========================================================= */
 
-function showMessage(message, type = "normal") {
-
-  let messageBox =
-    document.getElementById("messageBox");
+let messageTimer = null;
 
 
-  // Create message box if it doesn't exist
-  if (!messageBox) {
+function showMessage(
+  message,
+  type = "normal"
+) {
 
-    messageBox =
-      document.createElement("div");
-
-    messageBox.id =
-      "messageBox";
-
-
-    messageBox.style.position =
-      "fixed";
-
-    messageBox.style.bottom =
-      "20px";
-
-    messageBox.style.right =
-      "20px";
-
-    messageBox.style.zIndex =
-      "9999";
-
-    messageBox.style.padding =
-      "14px 18px";
-
-    messageBox.style.borderRadius =
-      "12px";
-
-    messageBox.style.fontWeight =
-      "600";
-
-    messageBox.style.maxWidth =
-      "350px";
-
-    messageBox.style.boxShadow =
-      "0 10px 30px rgba(0,0,0,0.15)";
-
-
-    document.body.appendChild(
-      messageBox
+  const box =
+    document.getElementById(
+      "messageBox"
     );
 
-  }
 
-
-  messageBox.textContent =
+  box.textContent =
     message;
 
 
-  if (type === "error") {
+  box.className =
+    "message-box show";
 
-    messageBox.style.background =
-      "#fee2e2";
 
-    messageBox.style.color =
-      "#991b1b";
+  if (
+    type === "error"
+  ) {
 
-  } else {
+    box.classList.add(
+      "error"
+    );
 
-    messageBox.style.background =
-      "#dcfce7";
+  }
 
-    messageBox.style.color =
-      "#166534";
+  else if (
+    type === "success"
+  ) {
+
+    box.classList.add(
+      "success"
+    );
 
   }
 
 
-  messageBox.style.display =
-    "block";
-
-
   clearTimeout(
-    window.mosquiScanMessageTimer
+    messageTimer
   );
 
 
-  window.mosquiScanMessageTimer =
+  messageTimer =
     setTimeout(
       function() {
 
-        messageBox.style.display =
-          "none";
+        box.classList.remove(
+          "show"
+        );
 
       },
-      4000
+      3500
     );
-
-}
-
-
-// ============================================================
-// OPTIONAL: CLEAR ALL RECORDS
-// ============================================================
-
-function clearAllRecords() {
-
-  const confirmation =
-    confirm(
-      "Are you sure you want to delete all inspection records?"
-    );
-
-
-  if (!confirmation) return;
-
-
-  records = [];
-
-
-  localStorage.removeItem(
-    "mosquiscanRecords"
-  );
-
-
-  updateDashboard();
-
-  displaySavedRecords();
-
-
-  showMessage(
-    "All inspection records have been cleared.",
-    "normal"
-  );
 
 }
