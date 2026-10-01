@@ -1,36 +1,40 @@
-/* =========================================================
-   MOSQUISCAN JAVASCRIPT
-========================================================= */
+/* =========================================
+   MOSQUISCAN
+   MAIN JAVASCRIPT
+========================================= */
 
 
-/* =========================================================
+/* =========================================
    CONFIGURATION
-========================================================= */
+========================================= */
 
 /*
-  Put your ESP32 IP address here.
+  IMPORTANT:
+  Replace the empty string with the actual
+  IP address of your ESP32.
 
   Example:
+
   const ESP32_IP = "192.168.1.45";
 
-  If you haven't connected the ESP32 yet,
-  leave it empty.
+  Do NOT copy the example unless that is
+  actually your ESP32 IP address.
 */
 
 const ESP32_IP = "";
 
 
 /*
-  Your Teachable Machine model.
+  Teachable Machine Model
 */
 
 const MODEL_URL =
   "https://teachablemachine.withgoogle.com/models/cKLAix4wn/";
 
 
-/* =========================================================
+/* =========================================
    GLOBAL VARIABLES
-========================================================= */
+========================================= */
 
 let model = null;
 
@@ -48,7 +52,7 @@ let map = null;
 
 
 /*
-  Load previously saved records.
+  Load saved records from browser storage.
 */
 
 let records =
@@ -57,34 +61,33 @@ let records =
   ) || [];
 
 
-/* =========================================================
-   INITIALIZATION
-========================================================= */
+/* =========================================
+   PAGE INITIALIZATION
+========================================= */
 
 document.addEventListener(
   "DOMContentLoaded",
-  initialize
+  () => {
+
+    setupMap();
+
+    setupEventListeners();
+
+    updateDashboard();
+
+    renderRecords();
+
+    loadAIModel();
+
+    updateESPInitialStatus();
+
+  }
 );
 
 
-async function initialize() {
-
-  setupMap();
-
-  setupEventListeners();
-
-  updateDashboard();
-
-  renderRecords();
-
-  await loadAIModel();
-
-}
-
-
-/* =========================================================
+/* =========================================
    EVENT LISTENERS
-========================================================= */
+========================================= */
 
 function setupEventListeners() {
 
@@ -100,6 +103,9 @@ function setupEventListeners() {
   const saveButton =
     document.getElementById("saveButton");
 
+  const removeImageButton =
+    document.getElementById("removeImageButton");
+
   const locationButton =
     document.getElementById("locationButton");
 
@@ -108,15 +114,10 @@ function setupEventListeners() {
       "clearLocationButton"
     );
 
-  const removeImageButton =
-    document.getElementById(
-      "removeImageButton"
-    );
-
 
   imageInput.addEventListener(
     "change",
-    handleImageSelection
+    handleImageUpload
   );
 
 
@@ -138,6 +139,12 @@ function setupEventListeners() {
   );
 
 
+  removeImageButton.addEventListener(
+    "click",
+    clearImage
+  );
+
+
   locationButton.addEventListener(
     "click",
     getCurrentLocation
@@ -150,17 +157,31 @@ function setupEventListeners() {
   );
 
 
-  removeImageButton.addEventListener(
-    "click",
-    clearImageOnly
-  );
+  /*
+    Manual coordinate changes.
+  */
+
+  document
+    .getElementById("latitude")
+    .addEventListener(
+      "change",
+      updateMapFromCoordinates
+    );
+
+
+  document
+    .getElementById("longitude")
+    .addEventListener(
+      "change",
+      updateMapFromCoordinates
+    );
 
 }
 
 
-/* =========================================================
-   LOAD AI MODEL
-========================================================= */
+/* =========================================
+   AI MODEL
+========================================= */
 
 async function loadAIModel() {
 
@@ -177,9 +198,14 @@ async function loadAIModel() {
         MODEL_URL + "metadata.json"
       );
 
+
     showMessage(
       "AI model loaded successfully.",
       "success"
+    );
+
+    console.log(
+      "MosquiScan AI model loaded."
     );
 
   } catch (error) {
@@ -190,7 +216,7 @@ async function loadAIModel() {
     );
 
     showMessage(
-      "Could not load the AI model. Check your internet connection and model URL.",
+      "Could not load the AI model. Check the model URL and internet connection.",
       "error"
     );
 
@@ -199,11 +225,11 @@ async function loadAIModel() {
 }
 
 
-/* =========================================================
-   IMAGE SELECTION
-========================================================= */
+/* =========================================
+   IMAGE UPLOAD
+========================================= */
 
-function handleImageSelection(event) {
+function handleImageUpload(event) {
 
   const file =
     event.target.files[0];
@@ -230,13 +256,15 @@ function handleImageSelection(event) {
 
   reader.onload = function(e) {
 
-    imageData = e.target.result;
+    imageData =
+      e.target.result;
 
 
     const preview =
       document.getElementById(
         "imagePreview"
       );
+
 
     preview.src =
       imageData;
@@ -248,31 +276,67 @@ function handleImageSelection(event) {
 
 
     /*
-      Reset previous AI result
-      when a new image is selected.
+      Reset previous AI result.
     */
 
-    resetAIResult();
+    currentAIResult = null;
+
+    currentConfidence = null;
+
+    currentReason = null;
+
+
+    document
+      .getElementById("aiResult")
+      .textContent =
+      "Ready for analysis";
+
+
+    document
+      .getElementById("confidence")
+      .textContent =
+      "—";
+
+
+    document
+      .getElementById("reason")
+      .textContent =
+      "Click “Analyze Image” to classify this inspection image.";
+
+
+    document
+      .getElementById("resultIcon")
+      .textContent =
+      "🤖";
+
+
+    document
+      .getElementById("confidenceFill")
+      .style.width =
+      "0%";
 
 
     document
       .getElementById("classifyButton")
-      .disabled = false;
-
-
-    document
-      .getElementById("saveButton")
-      .disabled = true;
+      .disabled =
+      false;
 
 
     document
       .getElementById("sendLedButton")
-      .disabled = true;
+      .disabled =
+      true;
+
+
+    document
+      .getElementById("saveButton")
+      .disabled =
+      true;
 
 
     showMessage(
-      "Image ready for AI analysis.",
-      "normal"
+      "Image ready for analysis.",
+      "success"
     );
 
   };
@@ -283,16 +347,98 @@ function handleImageSelection(event) {
 }
 
 
-/* =========================================================
-   CLASSIFY IMAGE
-========================================================= */
+/* =========================================
+   CLEAR IMAGE
+========================================= */
+
+function clearImage() {
+
+  document
+    .getElementById("imageInput")
+    .value =
+    "";
+
+
+  document
+    .getElementById("imagePreview")
+    .src =
+    "";
+
+
+  document
+    .getElementById("previewArea")
+    .classList.add("hidden");
+
+
+  currentAIResult = null;
+
+  currentConfidence = null;
+
+  currentReason = null;
+
+  imageData = null;
+
+
+  document
+    .getElementById("aiResult")
+    .textContent =
+    "Waiting for image...";
+
+
+  document
+    .getElementById("confidence")
+    .textContent =
+    "—";
+
+
+  document
+    .getElementById("reason")
+    .textContent =
+    "Analyze an image to generate the AI result and explanation.";
+
+
+  document
+    .getElementById("resultIcon")
+    .textContent =
+    "🤖";
+
+
+  document
+    .getElementById("confidenceFill")
+    .style.width =
+    "0%";
+
+
+  document
+    .getElementById("classifyButton")
+    .disabled =
+    true;
+
+
+  document
+    .getElementById("sendLedButton")
+    .disabled =
+    true;
+
+
+  document
+    .getElementById("saveButton")
+    .disabled =
+    true;
+
+}
+
+
+/* =========================================
+   AI CLASSIFICATION
+========================================= */
 
 async function classifyImage() {
 
   if (!model) {
 
     showMessage(
-      "The AI model is still loading.",
+      "The AI model is still loading. Please wait.",
       "error"
     );
 
@@ -303,7 +449,7 @@ async function classifyImage() {
   if (!imageData) {
 
     showMessage(
-      "Please capture or upload an image first.",
+      "Please upload an image first.",
       "error"
     );
 
@@ -311,16 +457,16 @@ async function classifyImage() {
   }
 
 
-  const button =
+  const classifyButton =
     document.getElementById(
       "classifyButton"
     );
 
 
-  button.disabled = true;
+  classifyButton.disabled = true;
 
-  button.textContent =
-    "⏳ Analyzing Image...";
+  classifyButton.textContent =
+    "🤖 Analyzing...";
 
 
   try {
@@ -332,49 +478,41 @@ async function classifyImage() {
 
 
     const predictions =
-      await model.predict(image);
+      await model.predict(
+        image,
+        false
+      );
 
 
     /*
-      Find the prediction
-      with the highest probability.
+      Find prediction with highest probability.
     */
 
-    let highest =
+    predictions.sort(
+      (a, b) =>
+        b.probability -
+        a.probability
+    );
+
+
+    const topPrediction =
       predictions[0];
 
 
-    for (
-      let i = 1;
-      i < predictions.length;
-      i++
-    ) {
-
-      if (
-        predictions[i].probability >
-        highest.probability
-      ) {
-
-        highest =
-          predictions[i];
-
-      }
-
-    }
-
-
     const className =
-      highest.className;
+      topPrediction.className;
+
+
+    const probability =
+      topPrediction.probability;
 
 
     currentConfidence =
-      highest.probability;
+      probability;
 
 
     /*
-      Convert Teachable Machine
-      class names into the
-      official MosquiScan labels.
+      Normalize the class name.
     */
 
     const normalized =
@@ -391,18 +529,14 @@ async function classifyImage() {
       currentAIResult =
         "Not a Possible Breeding Site";
 
-    }
-
-    else if (
+    } else if (
       normalized.includes("possible")
     ) {
 
       currentAIResult =
         "Possible Breeding Site";
 
-    }
-
-    else {
+    } else {
 
       currentAIResult =
         className;
@@ -410,37 +544,115 @@ async function classifyImage() {
     }
 
 
+    /*
+      Generate explanation.
+    */
+
     currentReason =
       generateReason(
         currentAIResult
       );
 
 
-    displayAIResult();
+    /*
+      Display result.
+    */
+
+    document
+      .getElementById("aiResult")
+      .textContent =
+      currentAIResult;
 
 
     document
-      .getElementById(
-        "sendLedButton"
-      )
-      .disabled = false;
+      .getElementById("confidence")
+      .textContent =
+      formatConfidence(
+        probability
+      );
 
 
     document
-      .getElementById(
-        "saveButton"
-      )
-      .disabled = false;
+      .getElementById("confidenceFill")
+      .style.width =
+      (
+        probability * 100
+      ).toFixed(1) + "%";
+
+
+    document
+      .getElementById("reason")
+      .textContent =
+      currentReason;
+
+
+    /*
+      Change icon.
+    */
+
+    const resultIcon =
+      document.getElementById(
+        "resultIcon"
+      );
+
+
+    if (
+      currentAIResult ===
+      "Possible Breeding Site"
+    ) {
+
+      resultIcon.textContent =
+        "🔴";
+
+    } else if (
+      currentAIResult ===
+      "Not a Possible Breeding Site"
+    ) {
+
+      resultIcon.textContent =
+        "🟢";
+
+    } else {
+
+      resultIcon.textContent =
+        "🤖";
+
+    }
+
+
+    /*
+      Enable ESP32 button.
+    */
+
+    document
+      .getElementById("sendLedButton")
+      .disabled =
+      false;
+
+
+    /*
+      Save button can now be used.
+    */
+
+    document
+      .getElementById("saveButton")
+      .disabled =
+      false;
 
 
     showMessage(
-      "AI analysis completed.",
+      "AI classification completed.",
       "success"
     );
 
-  }
 
-  catch (error) {
+    console.log(
+      "Predictions:",
+      predictions
+    );
+
+
+  } catch (error) {
 
     console.error(
       "Classification error:",
@@ -455,17 +667,17 @@ async function classifyImage() {
   }
 
 
-  button.disabled = false;
+  classifyButton.disabled = false;
 
-  button.textContent =
-    "🔍 Analyze Image";
+  classifyButton.textContent =
+    "🤖 Analyze Image";
 
 }
 
 
-/* =========================================================
-   GENERATE REASON
-========================================================= */
+/* =========================================
+   REASON GENERATOR
+========================================= */
 
 function generateReason(result) {
 
@@ -498,93 +710,58 @@ function generateReason(result) {
 
 
   return (
-    "The AI classification does not match the " +
-    "standard MosquiScan categories."
+    "The AI model produced a classification that " +
+    "does not match the expected MosquiScan categories."
   );
 
 }
 
 
-/* =========================================================
-   DISPLAY AI RESULT
-========================================================= */
+/* =========================================
+   CONFIDENCE FORMAT
+========================================= */
 
-function displayAIResult() {
+function formatConfidence(
+  probability
+) {
 
-  const result =
-    document.getElementById(
-      "aiResult"
-    );
-
-  const confidence =
-    document.getElementById(
-      "confidence"
-    );
-
-  const reason =
-    document.getElementById(
-      "reason"
-    );
-
-  const icon =
-    document.getElementById(
-      "resultIcon"
-    );
-
-
-  result.textContent =
-    currentAIResult;
-
-
-  confidence.textContent =
-    (
-      currentConfidence * 100
-    ).toFixed(2) + "%";
-
-
-  reason.textContent =
-    currentReason;
-
-
-  if (
-    currentAIResult ===
-    "Possible Breeding Site"
-  ) {
-
-    icon.textContent = "🔴";
-
-    icon.style.background =
-      "#fff0f0";
-
-  }
-
-  else if (
-    currentAIResult ===
-    "Not a Possible Breeding Site"
-  ) {
-
-    icon.textContent = "🟢";
-
-    icon.style.background =
-      "#e9f8f1";
-
-  }
-
-  else {
-
-    icon.textContent = "🧠";
-
-    icon.style.background =
-      "#eef4ff";
-
-  }
+  return (
+    (probability * 100)
+      .toFixed(2) +
+    "%"
+  );
 
 }
 
 
-/* =========================================================
+/* =========================================
    ESP32
-========================================================= */
+========================================= */
+
+function updateESPInitialStatus() {
+
+  if (!ESP32_IP) {
+
+    setESPStatus(
+      "Not Configured",
+      "error"
+    );
+
+    return;
+  }
+
+
+  setESPStatus(
+    "Ready",
+    "normal"
+  );
+
+}
+
+
+/* =========================================
+   SEND RESULT TO ESP32
+========================================= */
 
 async function sendResultToESP32() {
 
@@ -601,7 +778,6 @@ async function sendResultToESP32() {
     );
 
     return false;
-
   }
 
 
@@ -613,7 +789,6 @@ async function sendResultToESP32() {
     );
 
     return false;
-
   }
 
 
@@ -628,9 +803,7 @@ async function sendResultToESP32() {
     endpoint =
       "/possible";
 
-  }
-
-  else if (
+  } else if (
     currentAIResult ===
     "Not a Possible Breeding Site"
   ) {
@@ -638,9 +811,7 @@ async function sendResultToESP32() {
     endpoint =
       "/not-possible";
 
-  }
-
-  else {
+  } else {
 
     showMessage(
       "The AI result is not recognized by the ESP32.",
@@ -648,7 +819,6 @@ async function sendResultToESP32() {
     );
 
     return false;
-
   }
 
 
@@ -667,6 +837,7 @@ async function sendResultToESP32() {
         endpoint,
         {
           method: "GET",
+
           cache: "no-store"
         }
       );
@@ -701,9 +872,8 @@ async function sendResultToESP32() {
 
     return true;
 
-  }
 
-  catch (error) {
+  } catch (error) {
 
     console.error(
       "ESP32 connection error:",
@@ -724,25 +894,25 @@ async function sendResultToESP32() {
 
 
     return false;
-
   }
 
 }
 
 
-/* =========================================================
+/* =========================================
    ESP32 STATUS
-========================================================= */
+========================================= */
 
 function setESPStatus(
-  text,
+  status,
   type
 ) {
 
-  const status =
+  const statusText =
     document.getElementById(
       "espStatus"
     );
+
 
   const dot =
     document.getElementById(
@@ -750,17 +920,15 @@ function setESPStatus(
     );
 
 
-  status.textContent =
-    "ESP32: " + text;
+  statusText.textContent =
+    "ESP32 " + status;
 
 
   dot.className =
     "status-dot";
 
 
-  if (
-    type === "connected"
-  ) {
+  if (type === "connected") {
 
     dot.classList.add(
       "connected"
@@ -768,9 +936,8 @@ function setESPStatus(
 
   }
 
-  else if (
-    type === "error"
-  ) {
+
+  if (type === "error") {
 
     dot.classList.add(
       "error"
@@ -781,43 +948,557 @@ function setESPStatus(
 }
 
 
-/* =========================================================
+/* =========================================
+   MAP SETUP
+========================================= */
+
+function setupMap() {
+
+  /*
+    Default map location:
+    Candijay / Bohol area.
+  */
+
+  map =
+    L.map("map").setView(
+      [9.8190, 124.4970],
+      13
+    );
+
+
+  L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {
+      maxZoom: 19,
+
+      attribution:
+        "&copy; OpenStreetMap contributors"
+    }
+  ).addTo(map);
+
+
+  /*
+    Add existing saved markers.
+  */
+
+  records.forEach(
+    record => {
+
+      if (
+        record.latitude &&
+        record.longitude
+      ) {
+
+        addRecordMarker(
+          record
+        );
+
+      }
+
+    }
+  );
+
+}
+
+
+/* =========================================
+   CUSTOM MARKER ICON
+========================================= */
+
+function createMarkerIcon(
+  type
+) {
+
+  return L.divIcon({
+
+    className: "",
+
+    html:
+      '<div class="custom-marker ' +
+      type +
+      '"></div>',
+
+    iconSize: [18, 18],
+
+    iconAnchor: [9, 9],
+
+    popupAnchor: [0, -10]
+
+  });
+
+}
+
+
+/* =========================================
+   SET MAP LOCATION
+   DRAGGABLE TEMPORARY MARKER
+========================================= */
+
+function setMapLocation(
+  latitude,
+  longitude
+) {
+
+  if (
+    Number.isNaN(latitude) ||
+    Number.isNaN(longitude)
+  ) {
+
+    return;
+  }
+
+
+  /*
+    Remove previous temporary marker.
+  */
+
+  if (currentMarker) {
+
+    map.removeLayer(
+      currentMarker
+    );
+
+    currentMarker = null;
+  }
+
+
+  /*
+    Temporary marker.
+
+    It is draggable so the user can
+    manually adjust the inspection location.
+  */
+
+  currentMarker =
+    L.marker(
+      [latitude, longitude],
+      {
+        draggable: true,
+
+        icon:
+          createMarkerIcon(
+            "not-possible"
+          )
+      }
+    ).addTo(map);
+
+
+  currentMarker.bindPopup(
+    "<strong>Inspection Location</strong>" +
+    "<br>" +
+    "Drag this marker to adjust the location."
+  );
+
+
+  /*
+    Update coordinates when marker is dragged.
+  */
+
+  currentMarker.on(
+    "dragend",
+    function(event) {
+
+      const position =
+        event.target.getLatLng();
+
+
+      document.getElementById(
+        "latitude"
+      ).value =
+      position.lat.toFixed(6);
+
+
+      document.getElementById(
+        "longitude"
+      ).value =
+      position.lng.toFixed(6);
+
+
+      showMessage(
+        "Inspection location updated.",
+        "success"
+      );
+
+    }
+  );
+
+
+  /*
+    Move map to location.
+  */
+
+  map.setView(
+    [latitude, longitude],
+    Math.max(
+      map.getZoom(),
+      16
+    )
+  );
+
+
+  /*
+    Open popup.
+  */
+
+  currentMarker.openPopup();
+
+}
+
+
+/* =========================================
+   CURRENT LOCATION
+========================================= */
+
+function getCurrentLocation() {
+
+  if (!navigator.geolocation) {
+
+    showMessage(
+      "Geolocation is not supported by this browser.",
+      "error"
+    );
+
+    return;
+  }
+
+
+  showMessage(
+    "Getting your current location...",
+    "normal"
+  );
+
+
+  navigator.geolocation.getCurrentPosition(
+
+    function(position) {
+
+      const latitude =
+        position.coords.latitude;
+
+
+      const longitude =
+        position.coords.longitude;
+
+
+      document.getElementById(
+        "latitude"
+      ).value =
+      latitude.toFixed(6);
+
+
+      document.getElementById(
+        "longitude"
+      ).value =
+      longitude.toFixed(6);
+
+
+      setMapLocation(
+        latitude,
+        longitude
+      );
+
+
+      showMessage(
+        "Current location added. You can drag the marker to change it.",
+        "success"
+      );
+
+    },
+
+
+    function(error) {
+
+      console.error(
+        "Geolocation error:",
+        error
+      );
+
+
+      showMessage(
+        "Could not get your location. Please allow location permission or enter the coordinates manually.",
+        "error"
+      );
+
+    },
+
+
+    {
+      enableHighAccuracy: true,
+
+      timeout: 10000,
+
+      maximumAge: 0
+    }
+
+  );
+
+}
+
+
+/* =========================================
+   MANUAL COORDINATES → MAP
+========================================= */
+
+function updateMapFromCoordinates() {
+
+  const latitude =
+    parseFloat(
+      document.getElementById(
+        "latitude"
+      ).value
+    );
+
+
+  const longitude =
+    parseFloat(
+      document.getElementById(
+        "longitude"
+      ).value
+    );
+
+
+  if (
+    Number.isNaN(latitude) ||
+    Number.isNaN(longitude)
+  ) {
+
+    return;
+  }
+
+
+  if (
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+
+    showMessage(
+      "Invalid latitude or longitude.",
+      "error"
+    );
+
+    return;
+  }
+
+
+  setMapLocation(
+    latitude,
+    longitude
+  );
+
+}
+
+
+/* =========================================
+   CLEAR LOCATION
+========================================= */
+
+function clearLocation() {
+
+  document.getElementById(
+    "latitude"
+  ).value = "";
+
+
+  document.getElementById(
+    "longitude"
+  ).value = "";
+
+
+  if (currentMarker) {
+
+    map.removeLayer(
+      currentMarker
+    );
+
+    currentMarker = null;
+  }
+
+
+  showMessage(
+    "Inspection location cleared.",
+    "normal"
+  );
+
+}
+
+
+/* =========================================
+   ADD SAVED RECORD MARKER
+========================================= */
+
+function addRecordMarker(
+  record
+) {
+
+  if (
+    record.latitude === null ||
+    record.longitude === null ||
+    record.latitude === "" ||
+    record.longitude === ""
+  ) {
+
+    return;
+  }
+
+
+  const latitude =
+    parseFloat(
+      record.latitude
+    );
+
+
+  const longitude =
+    parseFloat(
+      record.longitude
+    );
+
+
+  if (
+    Number.isNaN(latitude) ||
+    Number.isNaN(longitude)
+  ) {
+
+    return;
+  }
+
+
+  let markerType =
+    "not-possible";
+
+
+  if (
+    record.result ===
+    "Possible Breeding Site"
+  ) {
+
+    markerType =
+      "possible";
+
+  }
+
+
+  const marker =
+    L.marker(
+      [latitude, longitude],
+      {
+        icon:
+          createMarkerIcon(
+            markerType
+          )
+      }
+    ).addTo(map);
+
+
+  /*
+    Build popup.
+  */
+
+  let popupHTML =
+    '<div class="map-popup">';
+
+
+  popupHTML +=
+    "<strong>" +
+    escapeHTML(
+      record.result
+    ) +
+    "</strong>";
+
+
+  popupHTML +=
+    "<p><b>Confidence:</b> " +
+    escapeHTML(
+      record.confidence || "—"
+    ) +
+    "</p>";
+
+
+  popupHTML +=
+    "<p><b>Date:</b> " +
+    escapeHTML(
+      record.date || "—"
+    ) +
+    "</p>";
+
+
+  popupHTML +=
+    "<p><b>Reason:</b> " +
+    escapeHTML(
+      record.reason || "—"
+    ) +
+    "</p>";
+
+
+  if (record.notes) {
+
+    popupHTML +=
+      "<p><b>Notes:</b> " +
+      escapeHTML(
+        record.notes
+      ) +
+      "</p>";
+
+  }
+
+
+  if (record.image) {
+
+    popupHTML +=
+      '<img src="' +
+      record.image +
+      '" alt="Inspection image">';
+
+  }
+
+
+  popupHTML +=
+    "</div>";
+
+
+  marker.bindPopup(
+    popupHTML
+  );
+
+}
+
+
+/* =========================================
    SAVE INSPECTION
-========================================================= */
+========================================= */
 
 function saveInspection() {
 
   if (!imageData) {
 
     showMessage(
-      "Please capture or upload an image first.",
+      "Please upload an image first.",
       "error"
     );
 
     return;
-
   }
 
 
   if (!currentAIResult) {
 
     showMessage(
-      "Please analyze the image first.",
+      "Analyze the image before saving.",
       "error"
     );
 
     return;
-
   }
 
 
-  const latitude =
+  const latitudeValue =
     document.getElementById(
       "latitude"
     ).value;
 
 
-  const longitude =
+  const longitudeValue =
     document.getElementById(
       "longitude"
     ).value;
@@ -826,7 +1507,11 @@ function saveInspection() {
   const notes =
     document.getElementById(
       "notes"
-    ).value;
+    ).value.trim();
+
+
+  const now =
+    new Date();
 
 
   const record = {
@@ -841,216 +1526,130 @@ function saveInspection() {
       currentAIResult,
 
     confidence:
-      currentConfidence,
+      currentConfidence
+        ? formatConfidence(
+            currentConfidence
+          )
+        : "—",
 
     reason:
       currentReason,
 
     latitude:
-      latitude || "",
+      latitudeValue,
 
     longitude:
-      longitude || "",
+      longitudeValue,
 
     notes:
-      notes || "",
+      notes,
 
     date:
-      new Date().toLocaleString()
+      now.toLocaleString()
 
   };
 
+
+  /*
+    Add record.
+  */
 
   records.unshift(
     record
   );
 
 
-  localStorage.setItem(
-    "mosquiscanRecords",
-    JSON.stringify(records)
-  );
+  /*
+    Save to browser local storage.
+  */
 
+  try {
+
+    localStorage.setItem(
+      "mosquiscanRecords",
+      JSON.stringify(
+        records
+      )
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Local storage error:",
+      error
+    );
+
+
+    showMessage(
+      "The record is too large for browser storage. Try using a smaller image.",
+      "error"
+    );
+
+    return;
+  }
+
+
+  /*
+    Add marker to map.
+  */
+
+  if (
+    latitudeValue &&
+    longitudeValue
+  ) {
+
+    addRecordMarker(
+      record
+    );
+
+  }
+
+
+  /*
+    Update dashboard.
+  */
 
   updateDashboard();
 
+
+  /*
+    Refresh record display.
+  */
+
   renderRecords();
 
-  addRecordMarker(
-    record
+
+  /*
+    Send result to ESP32.
+  */
+
+  if (ESP32_IP) {
+
+    sendResultToESP32();
+
+  }
+
+
+  showMessage(
+    "Inspection record saved successfully.",
+    "success"
   );
 
 
   /*
-    IMPORTANT:
-    Automatically clear the
-    entire inspection form.
+    Clear current inspection.
   */
 
   clearInspectionForm();
 
-
-  showMessage(
-    "Inspection saved successfully. The form is now ready for the next inspection.",
-    "success"
-  );
-
 }
 
 
-/* =========================================================
+/* =========================================
    CLEAR INSPECTION FORM
-========================================================= */
+========================================= */
 
 function clearInspectionForm() {
-
-  /*
-    Clear image input
-  */
-
-  const imageInput =
-    document.getElementById(
-      "imageInput"
-    );
-
-  imageInput.value = "";
-
-
-  /*
-    Clear image preview
-  */
-
-  const preview =
-    document.getElementById(
-      "imagePreview"
-    );
-
-  preview.src = "";
-
-
-  document
-    .getElementById(
-      "previewArea"
-    )
-    .classList.add(
-      "hidden"
-    );
-
-
-  /*
-    Clear AI result
-  */
-
-  document.getElementById(
-    "aiResult"
-  ).textContent =
-    "No image analyzed yet";
-
-
-  document.getElementById(
-    "confidence"
-  ).textContent =
-    "—";
-
-
-  document.getElementById(
-    "reason"
-  ).textContent =
-    "Analyze an image to generate an explanation";
-
-
-  document.getElementById(
-    "resultIcon"
-  ).textContent =
-    "🧠";
-
-
-  document.getElementById(
-    "resultIcon"
-  ).style.background =
-    "#e9f8f1";
-
-
-  /*
-    Clear location
-  */
-
-  document.getElementById(
-    "latitude"
-  ).value = "";
-
-
-  document.getElementById(
-    "longitude"
-  ).value = "";
-
-
-  /*
-    Clear notes
-  */
-
-  document.getElementById(
-    "notes"
-  ).value = "";
-
-
-  /*
-    Disable buttons
-  */
-
-  document.getElementById(
-    "classifyButton"
-  ).disabled = true;
-
-
-  document.getElementById(
-    "sendLedButton"
-  ).disabled = true;
-
-
-  document.getElementById(
-    "saveButton"
-  ).disabled = true;
-
-
-  /*
-    Reset variables
-  */
-
-  imageData = null;
-
-  currentAIResult = null;
-
-  currentConfidence = null;
-
-  currentReason = null;
-
-
-  /*
-    Remove temporary marker
-  */
-
-  if (
-    currentMarker &&
-    map
-  ) {
-
-    map.removeLayer(
-      currentMarker
-    );
-
-    currentMarker = null;
-
-  }
-
-}
-
-
-/* =========================================================
-   CLEAR IMAGE ONLY
-========================================================= */
-
-function clearImageOnly() {
 
   document.getElementById(
     "imageInput"
@@ -1071,169 +1670,35 @@ function clearImageOnly() {
     );
 
 
-  resetAIResult();
-
-
-  showMessage(
-    "Image removed.",
-    "normal"
-  );
-
-}
-
-
-/* =========================================================
-   RESET AI RESULT
-========================================================= */
-
-function resetAIResult() {
-
-  currentAIResult = null;
-
-  currentConfidence = null;
-
-  currentReason = null;
-
-
   document.getElementById(
     "aiResult"
   ).textContent =
-    "No image analyzed yet";
+  "Waiting for image...";
 
 
   document.getElementById(
     "confidence"
   ).textContent =
-    "—";
+  "—";
 
 
   document.getElementById(
     "reason"
   ).textContent =
-    "Analyze an image to generate an explanation";
+  "Analyze an image to generate the AI result and explanation.";
 
 
   document.getElementById(
     "resultIcon"
   ).textContent =
-    "🧠";
+  "🤖";
 
 
   document.getElementById(
-    "resultIcon"
-  ).style.background =
-    "#e9f8f1";
+    "confidenceFill"
+  ).style.width =
+  "0%";
 
-
-  document.getElementById(
-    "sendLedButton"
-  ).disabled = true;
-
-
-  document.getElementById(
-    "saveButton"
-  ).disabled = true;
-
-}
-
-
-/* =========================================================
-   LOCATION
-========================================================= */
-
-function getCurrentLocation() {
-
-  if (
-    !navigator.geolocation
-  ) {
-
-    showMessage(
-      "Geolocation is not supported by this browser.",
-      "error"
-    );
-
-    return;
-
-  }
-
-
-  showMessage(
-    "Getting your current location...",
-    "normal"
-  );
-
-
-  navigator.geolocation.getCurrentPosition(
-
-    function(position) {
-
-      const lat =
-        position.coords.latitude;
-
-
-      const lng =
-        position.coords.longitude;
-
-
-      document.getElementById(
-        "latitude"
-      ).value =
-        lat.toFixed(6);
-
-
-      document.getElementById(
-        "longitude"
-      ).value =
-        lng.toFixed(6);
-
-
-      setMapLocation(
-        lat,
-        lng
-      );
-
-
-      showMessage(
-        "Current location added.",
-        "success"
-      );
-
-    },
-
-
-    function(error) {
-
-      console.error(
-        "Location error:",
-        error
-      );
-
-
-      showMessage(
-        "Unable to get your location. Please allow location access or enter the coordinates manually.",
-        "error"
-      );
-
-    },
-
-    {
-      enableHighAccuracy: true,
-
-      timeout: 10000,
-
-      maximumAge: 0
-    }
-
-  );
-
-}
-
-
-/* =========================================================
-   CLEAR LOCATION
-========================================================= */
-
-function clearLocation() {
 
   document.getElementById(
     "latitude"
@@ -1245,10 +1710,43 @@ function clearLocation() {
   ).value = "";
 
 
-  if (
-    currentMarker &&
-    map
-  ) {
+  document.getElementById(
+    "notes"
+  ).value = "";
+
+
+  document.getElementById(
+    "classifyButton"
+  ).disabled =
+  true;
+
+
+  document.getElementById(
+    "sendLedButton"
+  ).disabled =
+  true;
+
+
+  document.getElementById(
+    "saveButton"
+  ).disabled =
+  true;
+
+
+  imageData = null;
+
+  currentAIResult = null;
+
+  currentConfidence = null;
+
+  currentReason = null;
+
+
+  /*
+    Remove temporary marker.
+  */
+
+  if (currentMarker) {
 
     map.removeLayer(
       currentMarker
@@ -1258,250 +1756,12 @@ function clearLocation() {
 
   }
 
-
-  showMessage(
-    "Location cleared.",
-    "normal"
-  );
-
 }
 
 
-/* =========================================================
-   MAP
-========================================================= */
-
-function setupMap() {
-
-  map =
-    L.map("map")
-      .setView(
-        [9.8190, 124.4970],
-        13
-      );
-
-
-  L.tileLayer(
-    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    {
-      maxZoom: 19,
-
-      attribution:
-        '&copy; OpenStreetMap contributors'
-    }
-  ).addTo(map);
-
-
-  /*
-    Load markers from
-    previously saved records.
-  */
-
-  records.forEach(
-    function(record) {
-
-      addRecordMarker(
-        record
-      );
-
-    }
-  );
-
-}
-
-
-/* =========================================================
-   SET MAP LOCATION
-========================================================= */
-
-function setMapLocation(
-  lat,
-  lng
-) {
-
-  if (!map) {
-    return;
-  }
-
-
-  map.setView(
-    [lat, lng],
-    17
-  );
-
-
-  if (
-    currentMarker
-  ) {
-
-    map.removeLayer(
-      currentMarker
-    );
-
-  }
-
-
-  const markerIcon =
-    createMarkerIcon(
-      "not-possible"
-    );
-
-
-  currentMarker =
-    L.marker(
-      [lat, lng],
-      {
-        icon:
-          markerIcon
-      }
-    )
-      .addTo(map);
-
-
-  currentMarker.bindPopup(
-    "<strong>Current Inspection Location</strong>"
-  ).openPopup();
-
-}
-
-
-/* =========================================================
-   ADD RECORD MARKER
-========================================================= */
-
-function addRecordMarker(
-  record
-) {
-
-  if (
-    !map ||
-    !record.latitude ||
-    !record.longitude
-  ) {
-
-    return;
-
-  }
-
-
-  const lat =
-    Number(
-      record.latitude
-    );
-
-
-  const lng =
-    Number(
-      record.longitude
-    );
-
-
-  if (
-    Number.isNaN(lat) ||
-    Number.isNaN(lng)
-  ) {
-
-    return;
-
-  }
-
-
-  const type =
-    record.result ===
-    "Possible Breeding Site"
-      ? "possible"
-      : "not-possible";
-
-
-  const marker =
-    L.marker(
-      [lat, lng],
-      {
-        icon:
-          createMarkerIcon(
-            type
-          )
-      }
-    ).addTo(map);
-
-
-  const popup =
-    `
-      <div style="min-width:180px">
-
-        <strong>
-          ${escapeHTML(record.result)}
-        </strong>
-
-        <br><br>
-
-        <b>Confidence:</b>
-        ${
-          (
-            Number(record.confidence) *
-            100
-          ).toFixed(2)
-        }%
-
-        <br>
-
-        <b>Date:</b>
-        ${escapeHTML(record.date)}
-
-        <br><br>
-
-        ${
-          record.image
-            ? `<img
-                src="${record.image}"
-                style="
-                  width:100%;
-                  max-height:120px;
-                  object-fit:cover;
-                  border-radius:8px;
-                "
-              >`
-            : ""
-        }
-
-      </div>
-    `;
-
-
-  marker.bindPopup(
-    popup
-  );
-
-}
-
-
-/* =========================================================
-   CREATE MARKER ICON
-========================================================= */
-
-function createMarkerIcon(
-  type
-) {
-
-  return L.divIcon({
-
-    className: "",
-
-    html:
-      `<div class="custom-marker ${type}"></div>`,
-
-    iconSize: [18, 18],
-
-    iconAnchor: [9, 9]
-
-  });
-
-}
-
-
-/* =========================================================
+/* =========================================
    DASHBOARD
-========================================================= */
+========================================= */
 
 function updateDashboard() {
 
@@ -1511,53 +1771,43 @@ function updateDashboard() {
 
   const possible =
     records.filter(
-      function(record) {
-
-        return (
-          record.result ===
-          "Possible Breeding Site"
-        );
-
-      }
+      record =>
+        record.result ===
+        "Possible Breeding Site"
     ).length;
 
 
   const notPossible =
     records.filter(
-      function(record) {
-
-        return (
-          record.result ===
-          "Not a Possible Breeding Site"
-        );
-
-      }
+      record =>
+        record.result ===
+        "Not a Possible Breeding Site"
     ).length;
 
 
   document.getElementById(
     "totalRecords"
   ).textContent =
-    total;
+  total;
 
 
   document.getElementById(
     "possibleSites"
   ).textContent =
-    possible;
+  possible;
 
 
   document.getElementById(
     "notPossibleSites"
   ).textContent =
-    notPossible;
+  notPossible;
 
 }
 
 
-/* =========================================================
+/* =========================================
    RENDER RECORDS
-========================================================= */
+========================================= */
 
 function renderRecords() {
 
@@ -1567,32 +1817,30 @@ function renderRecords() {
     );
 
 
-  if (
-    records.length === 0
-  ) {
+  if (!records.length) {
 
-    container.innerHTML =
+    container.innerHTML = `
 
-      `
-        <div class="empty-records">
+      <div class="empty-records">
 
-          <div>
-            📂
-          </div>
-
-          <h3>
-            No inspection records yet
-          </h3>
-
-          <p>
-            Saved inspections will appear here.
-          </p>
-
+        <div class="empty-icon">
+          📂
         </div>
-      `;
+
+        <h3>
+          No inspection records yet
+        </h3>
+
+        <p>
+          Analyze and save an inspection
+          to see it here.
+        </p>
+
+      </div>
+
+    `;
 
     return;
-
   }
 
 
@@ -1601,7 +1849,7 @@ function renderRecords() {
 
 
   records.forEach(
-    function(record) {
+    record => {
 
       const card =
         document.createElement(
@@ -1620,67 +1868,139 @@ function renderRecords() {
           : "not-possible";
 
 
-      card.innerHTML =
+      card.innerHTML = `
 
-        `
-          <img
-            src="${record.image}"
-            class="record-image"
-            alt="Inspection image"
-          >
+        <img
+          class="record-image"
+          src="${record.image}"
+          alt="Inspection image"
+        >
 
-          <div class="record-info">
+        <div class="record-content">
 
-            <span
+          <div class="record-top">
+
+            <div
               class="record-result ${resultClass}"
             >
-              ${escapeHTML(record.result)}
-            </span>
-
-            <h3>
-              Confidence:
               ${
-                (
-                  Number(record.confidence) *
-                  100
-                ).toFixed(2)
-              }%
-            </h3>
+                record.result ===
+                "Possible Breeding Site"
+                  ? "🔴 "
+                  : "🟢 "
+              }
 
-            <p>
-              ${escapeHTML(record.reason)}
-            </p>
+              ${escapeHTML(
+                record.result
+              )}
 
-            ${
-              record.notes
-                ? `
-                  <p>
-                    <strong>Notes:</strong>
-                    ${escapeHTML(record.notes)}
-                  </p>
-                `
-                : ""
-            }
+            </div>
 
-            ${
-              record.latitude &&
-              record.longitude
-                ? `
-                  <p>
-                    📍
-                    ${escapeHTML(record.latitude)},
-                    ${escapeHTML(record.longitude)}
-                  </p>
-                `
-                : ""
-            }
+            <div class="record-date">
+              ${escapeHTML(
+                record.date
+              )}
+            </div>
 
           </div>
 
-          <div class="record-date">
-            ${escapeHTML(record.date)}
+
+          <div class="record-details">
+
+            <div class="record-detail">
+
+              <span>
+                Confidence
+              </span>
+
+              <strong>
+                ${escapeHTML(
+                  record.confidence || "—"
+                )}
+              </strong>
+
+            </div>
+
+
+            <div class="record-detail">
+
+              <span>
+                Latitude
+              </span>
+
+              <strong>
+                ${escapeHTML(
+                  record.latitude || "—"
+                )}
+              </strong>
+
+            </div>
+
+
+            <div class="record-detail">
+
+              <span>
+                Longitude
+              </span>
+
+              <strong>
+                ${escapeHTML(
+                  record.longitude || "—"
+                )}
+              </strong>
+
+            </div>
+
+
+            <div class="record-detail">
+
+              <span>
+                Record ID
+              </span>
+
+              <strong>
+                ${record.id}
+              </strong>
+
+            </div>
+
           </div>
-        `;
+
+
+          <div class="record-reason">
+
+            <strong>
+              Reason:
+            </strong>
+
+            ${escapeHTML(
+              record.reason || "—"
+            )}
+
+          </div>
+
+
+          ${
+            record.notes
+              ? `
+                <div class="record-notes">
+
+                  <strong>
+                    Notes:
+                  </strong>
+
+                  ${escapeHTML(
+                    record.notes
+                  )}
+
+                </div>
+              `
+              : ""
+          }
+
+        </div>
+
+      `;
 
 
       container.appendChild(
@@ -1693,15 +2013,25 @@ function renderRecords() {
 }
 
 
-/* =========================================================
+/* =========================================
    ESCAPE HTML
-========================================================= */
+========================================= */
 
 function escapeHTML(
   value
 ) {
 
-  return String(value || "")
+  if (
+    value === null ||
+    value === undefined
+  ) {
+
+    return "";
+
+  }
+
+
+  return String(value)
     .replace(
       /&/g,
       "&amp;"
@@ -1726,11 +2056,11 @@ function escapeHTML(
 }
 
 
-/* =========================================================
+/* =========================================
    MESSAGE
-========================================================= */
+========================================= */
 
-let messageTimer = null;
+let messageTimeout = null;
 
 
 function showMessage(
@@ -1753,16 +2083,6 @@ function showMessage(
 
 
   if (
-    type === "error"
-  ) {
-
-    box.classList.add(
-      "error"
-    );
-
-  }
-
-  else if (
     type === "success"
   ) {
 
@@ -1773,14 +2093,25 @@ function showMessage(
   }
 
 
+  if (
+    type === "error"
+  ) {
+
+    box.classList.add(
+      "error"
+    );
+
+  }
+
+
   clearTimeout(
-    messageTimer
+    messageTimeout
   );
 
 
-  messageTimer =
+  messageTimeout =
     setTimeout(
-      function() {
+      () => {
 
         box.classList.remove(
           "show"
