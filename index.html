@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
 
@@ -27,27 +26,14 @@
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    crossorigin=""
   >
-
-  <!-- TensorFlow.js -->
-  <script
-    src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js">
-  </script>
-
-  <!-- Teachable Machine -->
-  <script
-    src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js">
-  </script>
-
 </head>
-
 
 <body>
 
-  <!-- =====================================================
+  <!-- =========================
        HEADER
-       ===================================================== -->
+  ========================== -->
 
   <header class="site-header">
 
@@ -68,8 +54,10 @@
           </div>
 
           <div class="brand-subtitle">
-            Smartphone-Based AI Detection System
-            <br>
+            Smartphone-Based AI Detection
+          </div>
+
+          <div class="school-name">
             Candijay Municipal High School
           </div>
 
@@ -77,13 +65,15 @@
 
       </div>
 
+      <div class="esp-status" id="espStatus">
 
-      <div class="header-status">
-
-        <span class="status-dot"></span>
+        <span
+          class="esp-dot"
+          id="espDot"
+        ></span>
 
         <span>
-          ESP32 System
+          ESP32: Not Connected
         </span>
 
       </div>
@@ -93,77 +83,70 @@
   </header>
 
 
-
-  <!-- =====================================================
+  <!-- =========================
        MAIN
-       ===================================================== -->
+  ========================== -->
 
-  <main>
+  <main class="main-container">
 
 
-    <!-- ===================================================
-         HERO
-         =================================================== -->
+    <!-- HERO -->
 
     <section class="hero">
 
       <div class="hero-content">
 
         <div class="hero-badge">
-          📱 Smartphone
-          →
+          📱 SMARTPHONE
+          <span>→</span>
           🤖 AI
-          →
-          🔌 ESP32
-          →
-          💡 LED
+          <span>→</span>
+          💡 ESP32
         </div>
 
-
         <h1>
-          Mosquito Breeding Site Detection
-          Made Smarter.
+          Detect. Classify. Map.
         </h1>
 
-
         <p>
-          MosquiScan uses a smartphone camera and an
-          AI image classification model to identify
-          images that may represent potential mosquito
-          breeding sites. The classification is then
-          sent to an ESP32 to provide a physical
-          red or green LED indication.
+          MosquiScan uses a smartphone camera and
+          artificial intelligence to identify images
+          that may represent potential mosquito
+          breeding sites.
         </p>
-
 
         <div class="hero-workflow">
 
-          <div class="workflow-item">
-            📷 Capture Image
+          <div class="hero-step">
+            <span>01</span>
+            Capture Image
           </div>
 
-          <div class="workflow-arrow">
+          <div class="hero-arrow">
             →
           </div>
 
-          <div class="workflow-item">
-            🤖 AI Classification
+          <div class="hero-step">
+            <span>02</span>
+            AI Classification
           </div>
 
-          <div class="workflow-arrow">
+          <div class="hero-arrow">
             →
           </div>
 
-          <div class="workflow-item">
-            🔌 ESP32
+          <div class="hero-step">
+            <span>03</span>
+            LED Output
           </div>
 
-          <div class="workflow-arrow">
+          <div class="hero-arrow">
             →
           </div>
 
-          <div class="workflow-item">
-            🔴 / 🟢 LED
+          <div class="hero-step">
+            <span>04</span>
+            Record & Map
           </div>
 
         </div>
@@ -173,57 +156,70 @@
     </section>
 
 
-
-    <!-- ===================================================
+    <!-- =========================
          DASHBOARD
-         =================================================== -->
+    ========================== -->
 
     <section class="dashboard">
 
+      <div class="dashboard-card">
 
-      <div class="dashboard-card total">
-
-        <div class="dashboard-label">
-          Total Records
+        <div class="dashboard-icon yellow">
+          📋
         </div>
 
-        <div
-          class="dashboard-number"
-          id="totalRecords"
-        >
-          0
-        </div>
+        <div>
 
-      </div>
+          <p>
+            Total Records
+          </p>
 
+          <h2 id="totalRecords">
+            0
+          </h2>
 
-      <div class="dashboard-card possible">
-
-        <div class="dashboard-label">
-          Possible Sites
-        </div>
-
-        <div
-          class="dashboard-number"
-          id="possibleSites"
-        >
-          0
         </div>
 
       </div>
 
 
-      <div class="dashboard-card not-possible">
+      <div class="dashboard-card">
 
-        <div class="dashboard-label">
-          Not Possible Sites
+        <div class="dashboard-icon red">
+          🔴
         </div>
 
-        <div
-          class="dashboard-number"
-          id="notPossibleSites"
-        >
-          0
+        <div>
+
+          <p>
+            Possible Sites
+          </p>
+
+          <h2 id="possibleSites">
+            0
+          </h2>
+
+        </div>
+
+      </div>
+
+
+      <div class="dashboard-card">
+
+        <div class="dashboard-icon green">
+          🟢
+        </div>
+
+        <div>
+
+          <p>
+            Not Possible Sites
+          </p>
+
+          <h2 id="notPossibleSites">
+            0
+          </h2>
+
         </div>
 
       </div>
@@ -231,13 +227,11 @@
     </section>
 
 
-
-    <!-- ===================================================
+    <!-- =========================
          NEW INSPECTION
-         =================================================== -->
+    ========================== -->
 
     <section class="section-card">
-
 
       <div class="section-title">
 
@@ -252,7 +246,8 @@
           </h2>
 
           <p>
-            Capture or upload an image for AI classification.
+            Capture or upload an inspection image
+            for AI classification.
           </p>
 
         </div>
@@ -260,67 +255,74 @@
       </div>
 
 
-
       <!-- IMAGE UPLOAD -->
 
-      <div class="upload-box">
-
-        <div class="upload-icon">
-          📷
-        </div>
-
-        <h3>
-          Capture or Upload an Image
-        </h3>
-
-        <p>
-          Use your smartphone camera or select an image
-          from your device.
-        </p>
-
-
-        <label
-          for="imageInput"
-          class="button button-primary"
-        >
-          📷 Choose Image
-        </label>
-
+      <div class="upload-area">
 
         <input
           type="file"
           id="imageInput"
-          class="upload-input"
           accept="image/*"
           capture="environment"
         >
 
+        <label
+          for="imageInput"
+          class="upload-box"
+        >
+
+          <div class="upload-icon">
+            📷
+          </div>
+
+          <h3>
+            Take or Upload an Image
+          </h3>
+
+          <p>
+            Use your smartphone camera or choose
+            an image from your device.
+          </p>
+
+          <span class="upload-button">
+            Choose Image
+          </span>
+
+        </label>
+
       </div>
 
 
-
-      <!-- IMAGE PREVIEW -->
+      <!-- PREVIEW -->
 
       <div
-        class="preview-area"
         id="previewArea"
+        class="preview-area hidden"
       >
+
+        <div class="preview-header">
+
+          <h3>
+            Image Preview
+          </h3>
+
+          <button
+            id="removeImageButton"
+            class="small-danger-button"
+            type="button"
+          >
+            ✕ Remove
+          </button>
+
+        </div>
 
         <img
           id="imagePreview"
-          alt="Selected inspection image"
+          src=""
+          alt="Inspection Preview"
         >
-
-        <button
-          type="button"
-          id="removeImageButton"
-          class="remove-image-button"
-        >
-          ✕ Remove Image
-        </button>
 
       </div>
-
 
 
       <!-- AI RESULT -->
@@ -329,84 +331,85 @@
 
         <div class="ai-result-header">
 
+          <div>
+
+            <span class="mini-label">
+              AI CLASSIFICATION
+            </span>
+
+            <h3>
+              MosquiScan AI
+            </h3>
+
+          </div>
+
           <div
-            class="result-icon"
             id="resultIcon"
+            class="result-icon"
           >
             🤖
           </div>
 
-          <div>
-
-            <div class="ai-result-title">
-              AI Classification
-            </div>
-
-            <div
-              class="ai-result-value"
-              id="aiResult"
-            >
-              Waiting for image...
-            </div>
-
-          </div>
-
         </div>
 
 
+        <div class="result-main">
 
-        <!-- CONFIDENCE -->
+          <div>
 
-        <div class="confidence-wrapper">
+            <span class="result-label">
+              Result
+            </span>
 
-          <div class="confidence-top">
+            <h2 id="aiResult">
+              Ready for analysis
+            </h2>
 
-            <span>
+          </div>
+
+
+          <div class="confidence-box">
+
+            <span class="result-label">
               Confidence
             </span>
 
-            <span id="confidence">
-              0%
-            </span>
+            <strong id="confidence">
+              —
+            </strong>
 
-          </div>
+            <div class="confidence-bar">
 
-          <div class="confidence-bar">
+              <div
+                id="confidenceFill"
+                class="confidence-fill"
+              ></div>
 
-            <div
-              class="confidence-fill"
-              id="confidenceFill"
-            ></div>
+            </div>
 
           </div>
 
         </div>
 
 
+        <div class="reason-box">
 
-        <!-- REASON -->
+          <span class="result-label">
+            Reason
+          </span>
 
-        <div
-          class="reason-box"
-          id="reason"
-        >
-          Analyze an image to see the AI result and
-          explanation.
+          <p id="reason">
+            Click “Analyze Image” to classify
+            this inspection image.
+          </p>
+
         </div>
 
-
-      </div>
-
-
-
-      <!-- ANALYZE BUTTON -->
-
-      <div class="analyze-row">
 
         <button
-          type="button"
           id="classifyButton"
-          class="button button-primary"
+          class="primary-button"
+          type="button"
           disabled
         >
           🤖 Analyze Image
@@ -415,40 +418,58 @@
       </div>
 
 
-
       <!-- ESP32 -->
 
       <div class="esp-box">
 
-        <div class="esp-header">
+        <div class="esp-box-icon">
+          💡
+        </div>
 
-          <div class="esp-title">
-            🔌 ESP32 LED Output
-          </div>
+        <div class="esp-box-content">
 
-          <div class="esp-status">
+          <h3>
+            ESP32 LED Output
+          </h3>
 
-            <span
-              class="esp-status-dot"
-              id="espDot"
-            ></span>
+          <p>
+            The ESP32 receives the AI result
+            and activates the corresponding LED.
+          </p>
 
-            <span id="espStatus">
-              Not Configured
-            </span>
+          <div class="led-indicators">
+
+            <div class="led-indicator">
+
+              <span class="led red-led"></span>
+
+              <span>
+                Possible Breeding Site
+              </span>
+
+            </div>
+
+            <div class="led-indicator">
+
+              <span class="led green-led"></span>
+
+              <span>
+                Not a Possible Breeding Site
+              </span>
+
+            </div>
 
           </div>
 
         </div>
 
-
         <button
-          type="button"
           id="sendLedButton"
-          class="button button-secondary"
+          class="secondary-button"
+          type="button"
           disabled
         >
-          💡 Send Result to ESP32
+          💡 Send Result
         </button>
 
       </div>
@@ -456,13 +477,11 @@
     </section>
 
 
-
-    <!-- ===================================================
+    <!-- =========================
          LOCATION
-         =================================================== -->
+    ========================== -->
 
     <section class="section-card">
-
 
       <div class="section-title">
 
@@ -477,7 +496,8 @@
           </h2>
 
           <p>
-            Add the location and notes for the inspection.
+            Add the location of the inspection
+            to the map.
           </p>
 
         </div>
@@ -485,126 +505,111 @@
       </div>
 
 
-
-      <!-- LOCATION BUTTONS -->
-
-      <div class="location-actions">
+      <div class="location-controls">
 
         <button
-          type="button"
           id="locationButton"
-          class="button button-primary"
+          class="secondary-button"
+          type="button"
         >
           📍 Use Current Location
         </button>
 
-
         <button
-          type="button"
           id="clearLocationButton"
-          class="button button-secondary"
+          class="outline-button"
+          type="button"
         >
-          ✕ Clear Location
+          Clear Location
         </button>
 
       </div>
 
 
+      <div class="coordinates-grid">
 
-      <!-- LOCATION FORM -->
-
-      <div class="form-grid">
-
-
-        <div class="form-group">
+        <div class="input-group">
 
           <label for="latitude">
             Latitude
           </label>
 
           <input
-            type="number"
+            type="text"
             id="latitude"
-            step="any"
             placeholder="e.g. 9.8190"
           >
 
         </div>
 
 
-
-        <div class="form-group">
+        <div class="input-group">
 
           <label for="longitude">
             Longitude
           </label>
 
           <input
-            type="number"
+            type="text"
             id="longitude"
-            step="any"
             placeholder="e.g. 124.4970"
           >
 
         </div>
 
+      </div>
 
 
-        <div class="form-group full">
+      <div class="input-group">
 
-          <label for="notes">
-            Inspection Notes
-          </label>
+        <label for="notes">
+          Notes
+        </label>
 
-          <textarea
-            id="notes"
-            placeholder="Enter additional observations..."
-          ></textarea>
-
-        </div>
+        <textarea
+          id="notes"
+          rows="3"
+          placeholder="Add observations or inspection notes..."
+        ></textarea>
 
       </div>
 
 
-
-      <!-- MAP -->
-
-      <div class="map-wrapper">
-
-        <div id="map"></div>
-
-      </div>
+      <div
+        id="map"
+        class="map"
+      ></div>
 
 
+      <div class="map-tip">
 
-      <!-- SAVE -->
-
-      <div class="save-area">
-
-        <button
-          type="button"
-          id="saveButton"
-          class="button button-primary"
-          disabled
-        >
-          💾 Save Inspection Record
-        </button>
+        💡
+        <strong>Tip:</strong>
+        You can drag the temporary marker
+        to adjust the inspection location.
 
       </div>
+
+
+      <button
+        id="saveButton"
+        class="save-button"
+        type="button"
+        disabled
+      >
+        💾 Save Inspection Record
+      </button>
 
     </section>
 
 
-
-    <!-- ===================================================
-         INSPECTION RECORDS
-         =================================================== -->
+    <!-- =========================
+         RECORDS
+    ========================== -->
 
     <section class="section-card">
 
-
       <div class="records-title-row">
-
 
         <div class="section-title records-title">
 
@@ -619,7 +624,8 @@
             </h2>
 
             <p>
-              Saved AI classifications and inspection locations.
+              Saved AI classifications and
+              inspection locations.
             </p>
 
           </div>
@@ -628,16 +634,14 @@
 
 
         <button
-          type="button"
           id="clearRecordsButton"
           class="clear-records-button"
+          type="button"
         >
           🗑️ Clear All Records
         </button>
 
-
       </div>
-
 
 
       <div
@@ -646,7 +650,19 @@
       >
 
         <div class="empty-records">
-          No inspection records yet.
+
+          <div class="empty-icon">
+            📂
+          </div>
+
+          <h3>
+            No Inspection Records Yet
+          </h3>
+
+          <p>
+            Your saved inspections will appear here.
+          </p>
+
         </div>
 
       </div>
@@ -654,13 +670,11 @@
     </section>
 
 
-
-    <!-- ===================================================
+    <!-- =========================
          WORKFLOW
-         =================================================== -->
+    ========================== -->
 
-    <section class="section-card">
-
+    <section class="section-card workflow-section">
 
       <div class="section-title">
 
@@ -675,7 +689,8 @@
           </h2>
 
           <p>
-            The complete inspection and classification process.
+            A simple smartphone-based inspection
+            workflow.
           </p>
 
         </div>
@@ -683,9 +698,7 @@
       </div>
 
 
-
       <div class="workflow-grid">
-
 
         <div class="workflow-card">
 
@@ -693,17 +706,21 @@
             01
           </div>
 
+          <div class="workflow-icon">
+            📱
+          </div>
+
           <h3>
             Capture
           </h3>
 
           <p>
-            The user captures an image of a suspected
-            mosquito-breeding environment using a smartphone.
+            Take a photo of a suspected
+            mosquito breeding site using
+            a smartphone.
           </p>
 
         </div>
-
 
 
         <div class="workflow-card">
@@ -712,17 +729,21 @@
             02
           </div>
 
+          <div class="workflow-icon">
+            🤖
+          </div>
+
           <h3>
-            Analyze
+            Classify
           </h3>
 
           <p>
-            The image is processed by the trained
-            MosquiScan AI model.
+            The trained AI model analyzes
+            the image and provides a
+            classification.
           </p>
 
         </div>
-
 
 
         <div class="workflow-card">
@@ -731,17 +752,21 @@
             03
           </div>
 
+          <div class="workflow-icon">
+            💡
+          </div>
+
           <h3>
-            Physical Output
+            Indicate
           </h3>
 
           <p>
-            The classification can be sent through Wi-Fi
-            to the ESP32, which activates the corresponding LED.
+            The ESP32 activates a red or
+            green LED according to the
+            AI result.
           </p>
 
         </div>
-
 
 
         <div class="workflow-card">
@@ -750,53 +775,63 @@
             04
           </div>
 
+          <div class="workflow-icon">
+            🗺️
+          </div>
+
           <h3>
-            Record
+            Record & Map
           </h3>
 
           <p>
-            The result, image, location, date, and reason
-            are saved as an inspection record.
+            Save the result, location,
+            reason, image, and notes
+            for inspection records.
           </p>
 
         </div>
-
 
       </div>
 
     </section>
 
-
   </main>
 
 
-
-  <!-- =====================================================
+  <!-- =========================
        FOOTER
-       ===================================================== -->
+  ========================== -->
 
   <footer class="site-footer">
 
-    <p>
-      <strong>
-        MosquiScan
-      </strong>
-      —
-      A Smartphone-Based AI System for Detecting
-      Potential Mosquito Breeding Sites
-    </p>
+    <div class="footer-logo">
+
+      <img
+        src="mosquiscan-logo.png"
+        alt="MosquiScan Logo"
+      >
+
+    </div>
+
+    <h3>
+      MOSQUISCAN
+    </h3>
 
     <p>
-      Candijay Municipal High School
+      A Smartphone-Based AI System for
+      Detecting Potential Mosquito Breeding Sites
     </p>
+
+    <span>
+      Candijay Municipal High School
+    </span>
 
   </footer>
 
 
-
-  <!-- =====================================================
+  <!-- =========================
        MESSAGE BOX
-       ===================================================== -->
+  ========================== -->
 
   <div
     id="messageBox"
@@ -804,19 +839,23 @@
   ></div>
 
 
-
-  <!-- Leaflet -->
+  <!-- =========================
+       SCRIPTS
+  ========================== -->
 
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    crossorigin="">
-  </script>
+  ></script>
 
+  <script
+    src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"
+  ></script>
 
-  <!-- Main JavaScript -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"
+  ></script>
 
   <script src="script.js"></script>
 
 </body>
-
 </html>
