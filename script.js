@@ -7,20 +7,7 @@
    CONFIGURATION
 ========================================================= */
 
-
-/*
-  IMPORTANT:
-  Replace the empty string with the REAL IP address
-  printed by your ESP32 Serial Monitor.
-
-  Example:
-
-  const ESP32_IP = "192.168.1.45";
-
-  Do NOT use the example unless it is actually your ESP32 IP.
-*/
-
-const ESP32_IP = "192.168.100.193";
+const ESP32_IP = "192.168.1.201";
 
 
 /* =========================================================
@@ -36,17 +23,12 @@ const MODEL_URL =
 ========================================================= */
 
 let model = null;
-
 let imageData = null;
-
 let currentAIResult = null;
-
 let currentConfidence = null;
-
 let currentReason = null;
-
+let currentSuggestion = null;
 let currentMarker = null;
-
 let map = null;
 
 
@@ -69,19 +51,54 @@ document.addEventListener(
   () => {
 
     setupMap();
-
     setupEventListeners();
-
+    setupWorkflowButtons();
     updateDashboard();
-
     renderRecords();
-
     loadAIModel();
-
     updateESPInitialStatus();
 
   }
 );
+
+
+/* =========================================================
+   HERO WORKFLOW BUTTONS
+========================================================= */
+
+function setupWorkflowButtons() {
+
+  const buttons =
+    document.querySelectorAll(".workflow-btn");
+
+  buttons.forEach(button => {
+
+    button.addEventListener("click", () => {
+
+      const targetId =
+        button.dataset.target;
+
+      const target =
+        document.getElementById(targetId);
+
+      if (!target) return;
+
+      buttons.forEach(btn =>
+        btn.classList.remove("active")
+      );
+
+      button.classList.add("active");
+
+      target.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+
+    });
+
+  });
+
+}
 
 
 /* =========================================================
@@ -90,48 +107,40 @@ document.addEventListener(
 
 function setupEventListeners() {
 
-
   const imageInput =
     document.getElementById(
       "imageInput"
     );
-
 
   const classifyButton =
     document.getElementById(
       "classifyButton"
     );
 
-
   const sendLedButton =
     document.getElementById(
       "sendLedButton"
     );
-
 
   const saveButton =
     document.getElementById(
       "saveButton"
     );
 
-
   const removeImageButton =
     document.getElementById(
       "removeImageButton"
     );
-
 
   const locationButton =
     document.getElementById(
       "locationButton"
     );
 
-
   const clearLocationButton =
     document.getElementById(
       "clearLocationButton"
     );
-
 
   const clearRecordsButton =
     document.getElementById(
@@ -144,42 +153,35 @@ function setupEventListeners() {
     handleImageUpload
   );
 
-
   classifyButton.addEventListener(
     "click",
     classifyImage
   );
-
 
   sendLedButton.addEventListener(
     "click",
     sendResultToESP32
   );
 
-
   saveButton.addEventListener(
     "click",
     saveInspection
   );
-
 
   removeImageButton.addEventListener(
     "click",
     clearImage
   );
 
-
   locationButton.addEventListener(
     "click",
     getCurrentLocation
   );
 
-
   clearLocationButton.addEventListener(
     "click",
     clearLocation
   );
-
 
   clearRecordsButton.addEventListener(
     "click",
@@ -319,10 +321,9 @@ function handleImageUpload(event) {
 
 
       currentAIResult = null;
-
       currentConfidence = null;
-
       currentReason = null;
+      currentSuggestion = null;
 
 
       document
@@ -355,6 +356,12 @@ function handleImageUpload(event) {
         )
         .textContent =
         "Click “Analyze Image” to classify this inspection image.";
+
+
+      /* Reset the existing Suggested Action panel */
+      displaySuggestion(
+        "The suggested action will appear here after AI analysis."
+      );
 
 
       document
@@ -433,12 +440,10 @@ function clearImage() {
 
 
   imageData = null;
-
   currentAIResult = null;
-
   currentConfidence = null;
-
   currentReason = null;
+  currentSuggestion = null;
 
 
   document
@@ -471,6 +476,12 @@ function clearImage() {
     )
     .textContent =
     "Analyze an image to generate an explanation.";
+
+
+  /* Reset the existing Suggested Action panel */
+  displaySuggestion(
+    "The suggested action will appear here after AI analysis."
+  );
 
 
   document
@@ -553,7 +564,6 @@ async function classifyImage() {
 
   try {
 
-
     const image =
       document.getElementById(
         "imagePreview"
@@ -598,11 +608,8 @@ async function classifyImage() {
 
 
     if (
-
       normalized.includes("not") &&
-
       normalized.includes("possible")
-
     ) {
 
       currentAIResult =
@@ -611,9 +618,7 @@ async function classifyImage() {
     }
 
     else if (
-
       normalized.includes("possible")
-
     ) {
 
       currentAIResult =
@@ -637,7 +642,15 @@ async function classifyImage() {
       );
 
 
-    /* Display */
+    /* Suggested Action */
+
+    currentSuggestion =
+      generateSuggestion(
+        currentAIResult
+      );
+
+
+    /* Display AI result */
 
     document
       .getElementById(
@@ -668,12 +681,21 @@ async function classifyImage() {
       "%";
 
 
+    /* Display explanation */
+
     document
       .getElementById(
         "reason"
       )
       .textContent =
       currentReason;
+
+
+    /* Display suggested action
+       using the existing HTML panel */
+    displaySuggestion(
+      currentSuggestion
+    );
 
 
     const resultIcon =
@@ -722,12 +744,59 @@ async function classifyImage() {
     }
 
 
+    /* =====================================================
+       AUTOMATIC ESP32 LED SIGNAL
+
+       Possible Breeding Site
+       → RED LED
+
+       Not a Possible Breeding Site
+       → GREEN LED
+    ===================================================== */
+
     document
       .getElementById(
         "sendLedButton"
       )
       .disabled =
-      false;
+      true;
+
+
+    showMessage(
+      "AI classification complete. Sending signal to ESP32...",
+      "normal"
+    );
+
+
+    const espSuccess =
+      await sendResultToESP32();
+
+
+    if (espSuccess) {
+
+      showMessage(
+
+        currentAIResult ===
+        "Possible Breeding Site"
+
+          ? "Possible breeding site detected. RED LED activated."
+
+          : "Not a possible breeding site. GREEN LED activated.",
+
+        "success"
+
+      );
+
+    }
+
+    else {
+
+      showMessage(
+        "AI result is ready, but the ESP32 signal could not be sent.",
+        "error"
+      );
+
+    }
 
 
     document
@@ -736,12 +805,6 @@ async function classifyImage() {
       )
       .disabled =
       false;
-
-
-    showMessage(
-      "AI classification complete.",
-      "success"
-    );
 
 
     console.log(
@@ -784,7 +847,6 @@ async function classifyImage() {
 
 function generateReason(result) {
 
-
   if (
     result ===
     "Possible Breeding Site"
@@ -814,10 +876,82 @@ function generateReason(result) {
 
 
   return (
-    "The AI classification does not match the expected "
-    +
+    "The AI classification does not match the expected " +
     "MosquiScan categories."
   );
+
+}
+
+
+/* =========================================================
+   SUGGESTED ACTION
+========================================================= */
+
+function generateSuggestion(result) {
+
+  if (
+    result ===
+    "Possible Breeding Site"
+  ) {
+
+    return (
+      "Remove or empty any stagnant water, clean the " +
+      "water-holding container, and keep the area dry. " +
+      "Conduct physical inspection and monitoring of the " +
+      "area for possible smoking activity and other " +
+      "environmental risks."
+    );
+
+  }
+
+
+  if (
+    result ===
+    "Not a Possible Breeding Site"
+  ) {
+
+    return (
+      "No immediate corrective action is indicated. " +
+      "Continue regular inspection and keep the area " +
+      "clean and free from standing water. Monitor the " +
+      "area for possible smoking activity and other " +
+      "environmental risks."
+    );
+
+  }
+
+
+  return (
+    "Conduct a physical inspection and monitoring of the " +
+    "area to verify whether stagnant water, smoking " +
+    "activity, or other environmental risks are present."
+  );
+
+}
+
+
+/* =========================================================
+   DISPLAY SUGGESTED ACTION
+========================================================= */
+
+function displaySuggestion(
+  suggestion
+) {
+
+  const element =
+    document.getElementById(
+      "suggestion"
+    );
+
+
+  if (!element) {
+    return;
+  }
+
+
+  element.textContent =
+    suggestion ||
+    "No suggested action available.";
 
 }
 
@@ -826,7 +960,9 @@ function generateReason(result) {
    FORMAT CONFIDENCE
 ========================================================= */
 
-function formatConfidence(value) {
+function formatConfidence(
+  value
+) {
 
   return (
     (value * 100).toFixed(1)
@@ -842,7 +978,6 @@ function formatConfidence(value) {
 ========================================================= */
 
 async function sendResultToESP32() {
-
 
   if (!ESP32_IP) {
 
@@ -878,16 +1013,28 @@ async function sendResultToESP32() {
   let endpoint = "";
 
 
+  /*
+    POSSIBLE BREEDING SITE
+    → RED LED
+    → ESP32 /red
+  */
+
   if (
     currentAIResult ===
     "Possible Breeding Site"
   ) {
 
     endpoint =
-      "/possible";
+      "/red";
 
   }
 
+
+  /*
+    NOT A POSSIBLE BREEDING SITE
+    → GREEN LED
+    → ESP32 /green
+  */
 
   else if (
     currentAIResult ===
@@ -895,7 +1042,7 @@ async function sendResultToESP32() {
   ) {
 
     endpoint =
-      "/not-possible";
+      "/green";
 
   }
 
@@ -914,7 +1061,6 @@ async function sendResultToESP32() {
 
   try {
 
-
     setESPStatus(
       "Connecting...",
       "normal"
@@ -930,6 +1076,7 @@ async function sendResultToESP32() {
 
         {
           method: "GET",
+          mode: "cors",
           cache: "no-store"
         }
 
@@ -970,7 +1117,6 @@ async function sendResultToESP32() {
 
   catch (error) {
 
-
     console.error(
       "ESP32 connection error:",
       error
@@ -985,6 +1131,93 @@ async function sendResultToESP32() {
 
     showMessage(
       "Could not connect to the ESP32. Make sure the ESP32 and smartphone are connected to the same Wi-Fi network.",
+      "error"
+    );
+
+
+    return false;
+
+  }
+
+}
+
+
+/* =========================================================
+   TURN OFF ESP32 LEDS
+========================================================= */
+
+async function turnOffESP32() {
+
+  if (!ESP32_IP) {
+
+    console.warn(
+      "ESP32 IP is not configured."
+    );
+
+    return false;
+
+  }
+
+
+  try {
+
+    const response =
+      await fetch(
+
+        "http://" +
+        ESP32_IP +
+        "/off",
+
+        {
+          method: "GET",
+          mode: "cors",
+          cache: "no-store"
+        }
+
+      );
+
+
+    if (!response.ok) {
+
+      throw new Error(
+        "ESP32 returned HTTP " +
+        response.status
+      );
+
+    }
+
+
+    const text =
+      await response.text();
+
+
+    console.log(
+      "ESP32 LED OFF:",
+      text
+    );
+
+
+    setESPStatus(
+      "Connected",
+      "connected"
+    );
+
+
+    return true;
+
+
+  }
+
+  catch (error) {
+
+    console.error(
+      "ESP32 LED OFF error:",
+      error
+    );
+
+
+    setESPStatus(
+      "Connection Failed",
       "error"
     );
 
@@ -1027,7 +1260,6 @@ function setESPStatus(
   text,
   type
 ) {
-
 
   const status =
     document.getElementById(
@@ -1090,8 +1322,7 @@ function setESPStatus(
    SAVE INSPECTION
 ========================================================= */
 
-function saveInspection() {
-
+async function saveInspection() {
 
   if (!imageData) {
 
@@ -1185,7 +1416,6 @@ function saveInspection() {
 
 
   updateDashboard();
-
   renderRecords();
 
 
@@ -1202,9 +1432,34 @@ function saveInspection() {
 
 
   showMessage(
-    "Inspection record saved successfully.",
+    "Inspection record saved successfully. Turning off LED...",
     "success"
   );
+
+
+  /* Turn OFF the active ESP32 LED after saving */
+
+  const ledOff =
+    await turnOffESP32();
+
+
+  if (ledOff) {
+
+    showMessage(
+      "Inspection saved. LED turned OFF.",
+      "success"
+    );
+
+  }
+
+  else {
+
+    showMessage(
+      "Inspection saved, but the ESP32 LED could not be turned OFF.",
+      "error"
+    );
+
+  }
 
 
   clearInspectionForm();
@@ -1217,7 +1472,6 @@ function saveInspection() {
 ========================================================= */
 
 function clearInspectionForm() {
-
 
   document
     .getElementById(
@@ -1275,6 +1529,13 @@ function clearInspectionForm() {
     "Analyze an image to generate an explanation.";
 
 
+  /* Reset the existing Suggested Action panel */
+
+  displaySuggestion(
+    "The suggested action will appear here after AI analysis."
+  );
+
+
   document
     .getElementById(
       "resultIcon"
@@ -1308,12 +1569,10 @@ function clearInspectionForm() {
 
 
   imageData = null;
-
   currentAIResult = null;
-
   currentConfidence = null;
-
   currentReason = null;
+  currentSuggestion = null;
 
 }
 
@@ -1323,7 +1582,6 @@ function clearInspectionForm() {
 ========================================================= */
 
 function updateDashboard() {
-
 
   const total =
     records.length;
@@ -1377,7 +1635,6 @@ function updateDashboard() {
 
 function setupMap() {
 
-
   map =
     L.map(
       "map"
@@ -1420,7 +1677,6 @@ function createMarkerIcon(
   type
 ) {
 
-
   return L.divIcon({
 
     className: "",
@@ -1449,7 +1705,6 @@ function createMarkerIcon(
 function addRecordMarker(
   record
 ) {
-
 
   const lat =
     parseFloat(
@@ -1545,7 +1800,6 @@ function addRecordMarker(
 ========================================================= */
 
 function getCurrentLocation() {
-
 
   if (
     !navigator.geolocation
@@ -1649,7 +1903,6 @@ function setMapLocation(
   lng
 ) {
 
-
   map.setView(
     [lat,lng],
     16
@@ -1720,7 +1973,6 @@ function setMapLocation(
 
 function updateMapFromCoordinates() {
 
-
   const lat =
     parseFloat(
       document
@@ -1766,7 +2018,6 @@ function updateMapFromCoordinates() {
 
 function clearLocation() {
 
-
   document
     .getElementById(
       "latitude"
@@ -1804,7 +2055,6 @@ function clearLocation() {
 ========================================================= */
 
 function renderRecords() {
-
 
   const container =
     document.getElementById(
@@ -1976,7 +2226,6 @@ function deleteRecord(
   id
 ) {
 
-
   records =
     records.filter(
       record =>
@@ -1991,9 +2240,7 @@ function deleteRecord(
 
 
   rebuildMap();
-
   updateDashboard();
-
   renderRecords();
 
 
@@ -2010,7 +2257,6 @@ function deleteRecord(
 ========================================================= */
 
 function clearAllRecords() {
-
 
   if (
     !records.length
@@ -2053,7 +2299,6 @@ function clearAllRecords() {
 
 
   updateDashboard();
-
   renderRecords();
 
 
@@ -2070,7 +2315,6 @@ function clearAllRecords() {
 ========================================================= */
 
 function rebuildMap() {
-
 
   if (!map) {
     return;
@@ -2148,7 +2392,6 @@ function showMessage(
   message,
   type = "normal"
 ) {
-
 
   const box =
     document.getElementById(
